@@ -1,9 +1,10 @@
 import React, { useState } from 'react';
-import { Camera, FileText } from 'lucide-react';
+import { Camera, FileText, Database } from 'lucide-react';
 import ImageIntake from './components/ImageIntake';
 import ReviewChallans from './components/ReviewChallans';
+import RTATestComponent from './components/RTATestComponent';
 
-type Screen = 'intake' | 'review';
+type Screen = 'intake' | 'review' | 'rta-test';
 
 function App() {
   const [currentScreen, setCurrentScreen] = useState<Screen>('intake');
@@ -49,13 +50,26 @@ function App() {
                 <FileText className="mr-2 h-4 w-4" />
                 Review Challans
               </button>
+              <button
+                onClick={() => setCurrentScreen('rta-test')}
+                className={`flex items-center px-4 py-2 rounded-md text-sm font-medium transition-colors duration-200 ${
+                  currentScreen === 'rta-test'
+                    ? 'bg-blue-100 text-blue-700'
+                    : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'
+                }`}
+              >
+                <Database className="mr-2 h-4 w-4" />
+                RTA Test
+              </button>
             </div>
           </div>
         </div>
       </nav>
 
       {/* Main Content */}
-      {currentScreen === 'intake' ? <ImageIntake /> : <ReviewChallans />}
+      {currentScreen === 'intake' && <ImageIntake />}
+      {currentScreen === 'review' && <ReviewChallans />}
+      {currentScreen === 'rta-test' && <RTATestComponent />}
     </div>
   );
 }

@@ -11,16 +11,40 @@ export interface Vehicle {
   plateNumber: string;
 }
 
+// Enhanced RTA Data structure for real API integration
 export interface RTAData {
+  registrationNumber: string;
+  ownerName: string;
+  ownerAddress: string;
+  vehicleClass: string;
   make: string;
   model: string;
   color: string;
+  fuelType: string;
+  engineNumber: string;
+  chassisNumber: string;
+  registrationDate: string;
+  fitnessValidUpto?: string;
+  insuranceValidUpto?: string;
+  rcStatus: 'ACTIVE' | 'SUSPENDED' | 'CANCELLED';
+  state: string;
+  rto: string;
+}
+
+// RTA API Response structure
+export interface RTAResponse {
+  success: boolean;
+  data?: RTAData;
+  error?: string;
+  errorCode?: 'NOT_FOUND' | 'INVALID_FORMAT' | 'API_ERROR' | 'UNAUTHORIZED';
 }
 
 export interface AIDetected {
   make: string;
   model: string;
   color: string;
+  vehicleType?: string;
+  confidence?: number;
 }
 
 export interface VehicleMatch {
@@ -28,6 +52,7 @@ export interface VehicleMatch {
   rtaData: string;
   aiDetected: string;
   match: boolean;
+  confidence?: number;
 }
 
 export interface Challan {
@@ -53,6 +78,10 @@ export interface Challan {
   fakePlate: boolean;
   ownerAddress: string;
   rtaMatched: boolean;
+  // Enhanced fields for real RTA integration
+  rtaData?: RTAData;
+  rtaApiStatus?: 'pending' | 'success' | 'failed';
+  rtaApiError?: string;
 }
 
 export type TabType = 'processing' | 'pending-review' | 'approved' | 'rejected';
