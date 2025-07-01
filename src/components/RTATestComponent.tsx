@@ -565,7 +565,6 @@ const RTATestComponent: React.FC = () => {
               <li>• Consider using backend API for production deployment</li>
             </>
           )}
-          <li>• Staging: https://echallan.tspolice.gov.in/TSeChallanRST</li>
           <li>• Production: https://echallan.tspolice.gov.in/TSeChallanRS</li>
           <li>• Token-based authentication (60-minute expiry with auto-refresh)</li>
           <li>• Fuzzy matching algorithm compares TSeChallan vs AI-detected vehicle details</li>

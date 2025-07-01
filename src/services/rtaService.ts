@@ -8,7 +8,7 @@ const BACKEND_API_CONFIG = {
 
 // Original TSeChallan config (kept for reference)
 const TSECHALLAN_CONFIG = {
-  baseUrl: import.meta.env.VITE_RTA_API_URL || 'https://echallan.tspolice.gov.in/TSeChallanRST',
+  baseUrl: import.meta.env.VITE_RTA_API_URL || 'https://echallan.tspolice.gov.in/TSeChallanRS',
   vendorCode: import.meta.env.VITE_RTA_VENDOR_CODE || '',
   vendorKey: import.meta.env.VITE_RTA_VENDOR_KEY || '',
   timeout: 15000,

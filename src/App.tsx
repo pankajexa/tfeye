@@ -3,11 +3,19 @@ import { Camera, FileText, Database } from 'lucide-react';
 import ImageIntake from './components/ImageIntake';
 import ReviewChallans from './components/ReviewChallans';
 import RTATestComponent from './components/RTATestComponent';
+import { ChallanProvider, useChallanContext } from './context/ChallanContext';
 
 type Screen = 'intake' | 'review' | 'rta-test';
 
-function App() {
+const AppContent: React.FC = () => {
   const [currentScreen, setCurrentScreen] = useState<Screen>('intake');
+  const { getChallansByStatus } = useChallanContext();
+
+  // Get live counts
+  const processingCount = getChallansByStatus('processing').length;
+  const pendingReviewCount = getChallansByStatus('pending-review').length;
+  const approvedCount = getChallansByStatus('approved').length;
+  const rejectedCount = getChallansByStatus('rejected').length;
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -38,6 +46,11 @@ function App() {
               >
                 <Camera className="mr-2 h-4 w-4" />
                 Image Intake
+                {processingCount > 0 && (
+                  <span className="ml-2 inline-flex items-center justify-center px-2 py-1 text-xs font-bold leading-none text-white bg-blue-600 rounded-full">
+                    {processingCount}
+                  </span>
+                )}
               </button>
               <button
                 onClick={() => setCurrentScreen('review')}
@@ -49,6 +62,11 @@ function App() {
               >
                 <FileText className="mr-2 h-4 w-4" />
                 Review Challans
+                {pendingReviewCount > 0 && (
+                  <span className="ml-2 inline-flex items-center justify-center px-2 py-1 text-xs font-bold leading-none text-white bg-orange-600 rounded-full">
+                    {pendingReviewCount}
+                  </span>
+                )}
               </button>
               <button
                 onClick={() => setCurrentScreen('rta-test')}
@@ -66,11 +84,47 @@ function App() {
         </div>
       </nav>
 
+      {/* Status Bar */}
+      <div className="bg-gray-100 border-b border-gray-200 px-4 py-2">
+        <div className="max-w-7xl mx-auto flex items-center justify-between text-sm">
+          <div className="flex items-center space-x-6">
+            <div className="flex items-center space-x-2">
+              <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
+              <span className="text-gray-600">Processing: {processingCount}</span>
+            </div>
+            <div className="flex items-center space-x-2">
+              <div className="w-2 h-2 bg-orange-500 rounded-full"></div>
+              <span className="text-gray-600">Pending Review: {pendingReviewCount}</span>
+            </div>
+            <div className="flex items-center space-x-2">
+              <div className="w-2 h-2 bg-green-500 rounded-full"></div>
+              <span className="text-gray-600">Approved: {approvedCount}</span>
+            </div>
+            <div className="flex items-center space-x-2">
+              <div className="w-2 h-2 bg-red-500 rounded-full"></div>
+              <span className="text-gray-600">Rejected: {rejectedCount}</span>
+            </div>
+          </div>
+          
+          <div className="text-gray-500">
+            Total: {processingCount + pendingReviewCount + approvedCount + rejectedCount} challans
+          </div>
+        </div>
+      </div>
+
       {/* Main Content */}
       {currentScreen === 'intake' && <ImageIntake />}
       {currentScreen === 'review' && <ReviewChallans />}
       {currentScreen === 'rta-test' && <RTATestComponent />}
     </div>
+  );
+};
+
+function App() {
+  return (
+    <ChallanProvider>
+      <AppContent />
+    </ChallanProvider>
   );
 }
 

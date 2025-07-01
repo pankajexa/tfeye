@@ -1,198 +1,174 @@
-import React, { useState } from 'react';
-import { XCircle, AlertTriangle, FileX, Edit3, ArrowRight } from 'lucide-react';
+import React from 'react';
+import { XCircle, AlertTriangle, Database, Car } from 'lucide-react';
 import { RejectedSubTab } from '../types';
-import { sampleChallans } from '../data/sampleData';
-import ImageZoom from './ImageZoom';
+import { useChallanContext } from '../context/ChallanContext';
 
 interface RejectedTabProps {
   activeSubTab: RejectedSubTab;
 }
 
 const RejectedTab: React.FC<RejectedTabProps> = ({ activeSubTab }) => {
-  const [editingPlate, setEditingPlate] = useState<string | null>(null);
-  const [plateNumbers, setPlateNumbers] = useState<{ [key: string]: string }>({});
+  const { getChallansByStatus } = useChallanContext();
+  const allRejectedChallans = getChallansByStatus('rejected');
 
-  const rejectedChallans = sampleChallans.filter(c => c.status === 'rejected');
-  
-  const systemRejectedChallans = rejectedChallans.filter(c => 
-    c.rejectionReason === 'Number plate not visible' || 
-    c.rejectionReason === 'System auto-reject'
-  );
-  
-  const operatorRejectedChallans = rejectedChallans.filter(c => 
-    c.rejectionReason && 
-    !['Number plate not visible', 'System auto-reject'].includes(c.rejectionReason)
-  );
-
-  const rtaMismatchChallans = sampleChallans.filter(c => !c.rtaMatched && c.status !== 'rejected');
-
-  const handlePlateUpdate = (challanId: string, plateNumber: string) => {
-    if (plateNumber.trim()) {
-      console.log(`Updating plate for ${challanId} to ${plateNumber} and sending to processing`);
-      // In a real app, this would update the challan and move it to processing
-      setEditingPlate(null);
-      setPlateNumbers(prev => ({ ...prev, [challanId]: '' }));
+  // Filter rejected challans based on sub-tab
+  const getFilteredChallans = () => {
+    switch (activeSubTab) {
+      case 'system-rejected':
+        return allRejectedChallans.filter(challan => 
+          !challan.reviewedBy || challan.reviewedBy === 'System' ||
+          challan.rejectionReason?.includes('System') ||
+          challan.rejectionReason?.includes('error') ||
+          challan.rejectionReason?.includes('quality')
+        );
+      case 'operator-rejected':
+        return allRejectedChallans.filter(challan => 
+          challan.reviewedBy && challan.reviewedBy !== 'System'
+        );
+      case 'rta-mismatch':
+        return allRejectedChallans.filter(challan => 
+          challan.rtaVerification && !challan.rtaVerification.matches
+        );
+      default:
+        return allRejectedChallans;
     }
   };
 
-  const renderSystemRejected = () => (
+  const filteredChallans = getFilteredChallans();
+
+  const getEmptyStateContent = () => {
+    switch (activeSubTab) {
+      case 'system-rejected':
+        return {
+          icon: XCircle,
+          title: 'No System Rejected Items',
+          description: 'Images automatically rejected by AI due to poor quality, unclear plates, or technical issues will appear here.',
+          subtext: 'The system maintains high quality standards for accurate violation detection.'
+        };
+      case 'operator-rejected':
+        return {
+          icon: AlertTriangle,
+          title: 'No Operator Rejected Items',
+          description: 'Images manually rejected by operators during the review process will appear here.',
+          subtext: 'Manual rejections help maintain accuracy and handle edge cases.'
+        };
+      case 'rta-mismatch':
+        return {
+          icon: Database,
+          title: 'No RTA Mismatch Items',
+          description: 'Images where vehicle details detected by AI don\'t match RTA database records will appear here.',
+          subtext: 'These cases require additional verification before proceeding.'
+        };
+      default:
+        return {
+          icon: XCircle,
+          title: 'No Rejected Items',
+          description: 'Rejected items will appear here.',
+          subtext: ''
+        };
+    }
+  };
+
+  const emptyState = getEmptyStateContent();
+  const IconComponent = emptyState.icon;
+
+  return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
-        <h3 className="text-lg font-medium text-gray-900">System Rejected</h3>
-        <span className="text-sm text-gray-500">{systemRejectedChallans.length} items</span>
+        <h2 className="text-lg font-medium text-gray-900">
+          {activeSubTab === 'system-rejected' && 'System Rejected'}
+          {activeSubTab === 'operator-rejected' && 'Operator Rejected'}
+          {activeSubTab === 'rta-mismatch' && 'RTA Mismatch'}
+        </h2>
+        <span className="text-sm text-gray-500">{filteredChallans.length} items</span>
       </div>
 
       <div className="bg-white rounded-lg shadow-sm border border-gray-200">
-        {systemRejectedChallans.length === 0 ? (
+        {filteredChallans.length === 0 ? (
           <div className="p-8 text-center">
-            <FileX className="mx-auto h-12 w-12 text-gray-400 mb-4" />
-            <p className="text-gray-500">No system rejected images</p>
+            <IconComponent className="mx-auto h-12 w-12 text-gray-400 mb-4" />
+            <h3 className="text-lg font-medium text-gray-900 mb-2">{emptyState.title}</h3>
+            <p className="text-gray-500 mb-4">{emptyState.description}</p>
+            {emptyState.subtext && (
+              <p className="text-sm text-gray-400">{emptyState.subtext}</p>
+            )}
           </div>
         ) : (
           <div className="divide-y divide-gray-200">
-            {systemRejectedChallans.map((challan) => (
+            {filteredChallans.map((challan) => (
               <div key={challan.id} className="p-6">
                 <div className="flex items-start space-x-4">
-                  <div className="flex-shrink-0 w-32">
-                    <ImageZoom
-                      src={challan.image}
-                      alt="System rejected image"
-                      plateNumber={challan.plateNumber}
+                  <div className="flex-shrink-0">
+                    <img
+                      src={challan.preview}
+                      alt="Rejected traffic image"
+                      className="h-16 w-16 rounded-lg object-cover"
                     />
                   </div>
                   
                   <div className="flex-1 min-w-0">
-                    <div className="flex items-center justify-between mb-2">
+                    <div className="flex items-center justify-between">
                       <div className="flex items-center space-x-3">
-                        <h4 className="text-sm font-medium text-gray-900">
+                        <h3 className="text-sm font-medium text-gray-900">
                           Challan {challan.id}
-                        </h4>
+                        </h3>
                         <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800">
                           <XCircle className="w-3 h-3 mr-1" />
-                          System Rejected
+                          Rejected
                         </span>
                       </div>
                       <div className="text-sm text-gray-500">
-                        {challan.timestamp}
+                        {challan.reviewTimestamp ? new Date(challan.reviewTimestamp).toLocaleString() : new Date(challan.timestamp).toLocaleString()}
                       </div>
                     </div>
                     
-                    <p className="text-sm text-gray-600 mb-3">
-                      Reason: {challan.rejectionReason}
-                    </p>
-
-                    {/* Plate Number Update Section */}
-                    <div className="bg-gray-50 p-3 rounded-lg">
-                      <div className="flex items-center justify-between mb-2">
-                        <span className="text-sm font-medium text-gray-700">Update Plate Number:</span>
-                        {editingPlate !== challan.id && (
-                          <button
-                            onClick={() => setEditingPlate(challan.id)}
-                            className="inline-flex items-center px-2 py-1 text-xs font-medium text-blue-600 hover:text-blue-800"
-                          >
-                            <Edit3 className="w-3 h-3 mr-1" />
-                            Edit
-                          </button>
+                    <div className="mt-2 grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
+                      <div>
+                        <span className="font-medium text-gray-600">Vehicle:</span>
+                        <div className="flex items-center space-x-1 mt-1">
+                          <Car className="w-3 h-3 text-gray-400" />
+                          <span className="font-mono text-blue-600">{challan.plateNumber || 'No plate detected'}</span>
+                        </div>
+                        {challan.vehicleDetails && (
+                          <p className="text-xs text-gray-500">{challan.vehicleDetails.vehicleType} - {challan.vehicleDetails.make}</p>
                         )}
                       </div>
                       
-                      {editingPlate === challan.id ? (
-                        <div className="flex space-x-2">
-                          <input
-                            type="text"
-                            value={plateNumbers[challan.id] || ''}
-                            onChange={(e) => setPlateNumbers(prev => ({ ...prev, [challan.id]: e.target.value }))}
-                            placeholder="Enter plate number (e.g., TS09AB1234)"
-                            className="flex-1 px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                          />
-                          <button
-                            onClick={() => handlePlateUpdate(challan.id, plateNumbers[challan.id] || '')}
-                            disabled={!plateNumbers[challan.id]?.trim()}
-                            className="inline-flex items-center px-3 py-2 bg-green-600 text-white text-sm rounded-md hover:bg-green-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors duration-200"
-                          >
-                            <ArrowRight className="w-3 h-3 mr-1" />
-                            Send to Processing
-                          </button>
-                          <button
-                            onClick={() => setEditingPlate(null)}
-                            className="px-3 py-2 border border-gray-300 text-gray-700 text-sm rounded-md hover:bg-gray-50 transition-colors duration-200"
-                          >
-                            Cancel
-                          </button>
-                        </div>
-                      ) : (
-                        <div className="text-sm text-gray-500">
-                          Click edit to add plate number and send to processing
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
-    </div>
-  );
-
-  const renderOperatorRejected = () => (
-    <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <h3 className="text-lg font-medium text-gray-900">Operator Rejected</h3>
-        <span className="text-sm text-gray-500">{operatorRejectedChallans.length} items</span>
-      </div>
-
-      <div className="bg-white rounded-lg shadow-sm border border-gray-200">
-        {operatorRejectedChallans.length === 0 ? (
-          <div className="p-8 text-center">
-            <XCircle className="mx-auto h-12 w-12 text-gray-400 mb-4" />
-            <p className="text-gray-500">No operator rejected challans</p>
-          </div>
-        ) : (
-          <div className="space-y-6 p-6">
-            {operatorRejectedChallans.map((challan) => (
-              <div key={challan.id} className="border border-gray-200 rounded-lg p-4">
-                <div className="flex items-start space-x-4">
-                  <div className="flex-shrink-0 w-32">
-                    <ImageZoom
-                      src={challan.image}
-                      alt="Operator rejected challan"
-                      plateNumber={challan.plateNumber}
-                    />
-                  </div>
-                  
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center justify-between">
-                      <h4 className="text-lg font-medium text-gray-900">
-                        Challan {challan.id}
-                      </h4>
-                      <span className="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-red-100 text-red-800">
-                        <XCircle className="w-4 h-4 mr-1" />
-                        Rejected
-                      </span>
-                    </div>
-                    
-                    <div className="mt-2 grid grid-cols-2 gap-4 text-sm">
                       <div>
                         <span className="font-medium text-gray-600">Rejection Reason:</span>
-                        <p className="text-red-600 mt-1">{challan.rejectionReason}</p>
+                        <p className="text-red-600 mt-1 font-medium">{challan.rejectionReason || 'System error'}</p>
                       </div>
+                      
                       <div>
-                        <span className="font-medium text-gray-600">Rejected At:</span>
-                        <p className="text-gray-900 mt-1">{challan.timestamp}</p>
+                        <span className="font-medium text-gray-600">Rejected By:</span>
+                        <p className="text-gray-900 mt-1">{challan.reviewedBy || 'System'}</p>
+                        {challan.rtaVerification && (
+                          <p className="text-xs text-gray-500">
+                            RTA Match: {Math.round(challan.rtaVerification.overallScore)}%
+                          </p>
+                        )}
                       </div>
                     </div>
+
+                    {/* Show detected violations if any */}
+                    {challan.violations.length > 0 && (
+                      <div className="mt-3">
+                        <span className="text-sm font-medium text-gray-600">Detected Violations:</span>
+                        <div className="mt-1 flex flex-wrap gap-1">
+                          {challan.violations.map((violation, index) => (
+                            <span
+                              key={index}
+                              className="inline-block px-2 py-1 rounded text-xs bg-gray-100 text-gray-700"
+                            >
+                              {violation}
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+                    )}
                     
-                    <div className="mt-3 grid grid-cols-2 gap-4 text-sm">
-                      <div>
-                        <span className="font-medium text-gray-600">Officer:</span>
-                        <p className="text-gray-900">{challan.sectorOfficer.name}</p>
-                      </div>
-                      <div>
-                        <span className="font-medium text-gray-600">Location:</span>
-                        <p className="text-gray-900">{challan.jurisdiction.pointName}</p>
-                      </div>
+                    <div className="mt-3 text-sm text-gray-600">
+                      <span className="font-medium">Analysis:</span> {new Date(challan.timestamp).toLocaleString()}
                     </div>
                   </div>
                 </div>
@@ -203,104 +179,6 @@ const RejectedTab: React.FC<RejectedTabProps> = ({ activeSubTab }) => {
       </div>
     </div>
   );
-
-  const renderRTAMismatch = () => (
-    <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <h3 className="text-lg font-medium text-gray-900">RTA Mismatch</h3>
-        <span className="text-sm text-gray-500">{rtaMismatchChallans.length} items</span>
-      </div>
-
-      <div className="bg-white rounded-lg shadow-sm border border-gray-200">
-        {rtaMismatchChallans.length === 0 ? (
-          <div className="p-8 text-center">
-            <AlertTriangle className="mx-auto h-12 w-12 text-gray-400 mb-4" />
-            <p className="text-gray-500">No RTA mismatches found</p>
-          </div>
-        ) : (
-          <div className="space-y-6 p-6">
-            {rtaMismatchChallans.map((challan) => (
-              <div key={challan.id} className="border border-orange-200 rounded-lg p-4 bg-orange-50">
-                <div className="flex items-start space-x-4">
-                  <div className="flex-shrink-0 w-32">
-                    <ImageZoom
-                      src={challan.image}
-                      alt="RTA mismatch"
-                      plateNumber={challan.plateNumber}
-                    />
-                  </div>
-                  
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center justify-between">
-                      <h4 className="text-lg font-medium text-gray-900">
-                        Challan {challan.id}
-                      </h4>
-                      <span className="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-orange-100 text-orange-800">
-                        <AlertTriangle className="w-4 h-4 mr-1" />
-                        RTA Mismatch
-                      </span>
-                    </div>
-                    
-                    <div className="mt-4">
-                      <h5 className="text-sm font-medium text-gray-900 mb-2">Data Comparison</h5>
-                      <div className="bg-white rounded-lg overflow-hidden border border-gray-200">
-                        <table className="min-w-full">
-                          <thead className="bg-gray-50">
-                            <tr>
-                              <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Field</th>
-                              <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">RTA Data</th>
-                              <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">AI Detected</th>
-                              <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
-                            </tr>
-                          </thead>
-                          <tbody className="divide-y divide-gray-200">
-                            {challan.vehicleMatches.map((match, index) => (
-                              <tr key={index} className={!match.match ? 'bg-red-50' : ''}>
-                                <td className="px-4 py-2 text-sm font-medium text-gray-900">{match.field}</td>
-                                <td className="px-4 py-2 text-sm text-gray-900">{match.rtaData}</td>
-                                <td className="px-4 py-2 text-sm text-gray-900">{match.aiDetected}</td>
-                                <td className="px-4 py-2 text-sm">
-                                  {match.match ? (
-                                    <span className="text-green-600">✓ Match</span>
-                                  ) : (
-                                    <span className="text-red-600 font-medium">✗ Mismatch</span>
-                                  )}
-                                </td>
-                              </tr>
-                            ))}
-                          </tbody>
-                        </table>
-                      </div>
-                    </div>
-                    
-                    <div className="mt-4 flex space-x-3">
-                      <button className="px-4 py-2 bg-green-600 text-white text-sm rounded-md hover:bg-green-700 transition-colors duration-200">
-                        Approve (Fake No Plate)
-                      </button>
-                      <button className="px-4 py-2 bg-gray-600 text-white text-sm rounded-md hover:bg-gray-700 transition-colors duration-200">
-                        Back to Review
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
-    </div>
-  );
-
-  switch (activeSubTab) {
-    case 'system-rejected':
-      return renderSystemRejected();
-    case 'operator-rejected':
-      return renderOperatorRejected();
-    case 'rta-mismatch':
-      return renderRTAMismatch();
-    default:
-      return renderSystemRejected();
-  }
 };
 
 export default RejectedTab;
