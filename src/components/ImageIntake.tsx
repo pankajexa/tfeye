@@ -12,6 +12,14 @@ interface AnalyzedImage {
   analysis?: GeminiAnalysisResponse;
   error?: string;
   uploadProgress?: number;
+  // Enhanced workflow states
+  geminiStatus: 'pending' | 'analyzing' | 'completed' | 'error';
+  rtaStatus: 'pending' | 'analyzing' | 'completed' | 'error' | 'skipped';
+  comparisonStatus: 'pending' | 'analyzing' | 'completed' | 'skipped';
+  detectedPlateNumber?: string;
+  rtaData?: any;
+  geminiData?: any;
+  comparisonResult?: any;
 }
 
 const ImageIntake: React.FC = () => {
@@ -36,55 +44,125 @@ const ImageIntake: React.FC = () => {
     }
   };
 
-  const analyzeImageWithGemini = async (imageFile: AnalyzedImage) => {
+  const enhancedImageAnalysis = async (imageFile: AnalyzedImage) => {
     try {
-      console.log('🔍 Starting Gemini analysis for:', imageFile.file.name);
+      console.log('🔍 Starting enhanced parallel analysis for:', imageFile.file.name);
       
-      // Update status to analyzing
+      // Update overall status to analyzing
       setAnalyzedImages(prev => prev.map(img => 
         img.id === imageFile.id 
-          ? { ...img, status: 'analyzing' }
+          ? { ...img, status: 'analyzing', geminiStatus: 'analyzing' }
           : img
       ));
 
       // Update challan status to processing
       updateChallanStatus(imageFile.challanId, 'processing');
 
-      // Call Gemini API
-      const analysis = await apiService.analyzeImage(imageFile.file);
+      // Step 1: Start Gemini analysis to get vehicle details and plate number
+      console.log('📍 Step 1: Starting Gemini analysis...');
+      const geminiAnalysis = await apiService.analyzeImage(imageFile.file);
       
-      console.log('✅ Gemini analysis completed:', analysis);
+      console.log('✅ Gemini analysis completed:', geminiAnalysis);
 
-      // Update with results
+      // Extract plate number from Gemini results
+      const detectedPlateNumber = geminiAnalysis.gemini_analysis?.vehicle_details?.number_plate?.text;
+      
+      // Update with Gemini results
       setAnalyzedImages(prev => prev.map(img => 
         img.id === imageFile.id 
           ? { 
               ...img, 
-              status: 'completed', 
-              analysis,
-              error: undefined
+              geminiStatus: 'completed',
+              geminiData: geminiAnalysis.gemini_analysis,
+              detectedPlateNumber,
+              rtaStatus: detectedPlateNumber ? 'analyzing' : 'skipped'
             }
           : img
       ));
 
-      // Update the challan in context with analysis results
-      updateChallanWithAnalysis(imageFile.challanId, analysis);
+      let rtaData: any = null;
+      let comparisonResult: any = null;
 
-      // Auto-remove from local state after 3 seconds (moved to review queue)
+      // Step 2: If plate number detected, start RTA lookup
+      if (detectedPlateNumber) {
+        console.log('📍 Step 2: Starting RTA lookup for plate:', detectedPlateNumber);
+        
+        try {
+          const rtaResponse = await apiService.getVehicleDetails(detectedPlateNumber);
+          rtaData = rtaResponse.data;
+          
+          console.log('✅ RTA lookup completed:', rtaData);
+          
+          // Update with RTA results
+          setAnalyzedImages(prev => prev.map(img => 
+            img.id === imageFile.id 
+              ? { 
+                  ...img, 
+                  rtaStatus: 'completed',
+                  rtaData,
+                  comparisonStatus: 'analyzing'
+                }
+              : img
+          ));
+
+          // Step 3: Compare RTA data with Gemini detected details
+          console.log('📍 Step 3: Comparing RTA vs AI detected details...');
+          comparisonResult = await performVehicleComparison(rtaData, geminiAnalysis.gemini_analysis?.vehicle_details);
+          
+          console.log('✅ Comparison completed:', comparisonResult);
+
+        } catch (rtaError) {
+          console.error('⚠️ RTA lookup failed:', rtaError);
+          setAnalyzedImages(prev => prev.map(img => 
+            img.id === imageFile.id 
+              ? { ...img, rtaStatus: 'error' }
+              : img
+          ));
+        }
+      } else {
+        console.log('⚠️ No plate number detected, skipping RTA lookup');
+      }
+
+      // Final update with all results
+      setAnalyzedImages(prev => prev.map(img => 
+        img.id === imageFile.id 
+          ? { 
+              ...img, 
+              status: 'completed',
+              comparisonStatus: comparisonResult ? 'completed' : 'skipped',
+              comparisonResult,
+              analysis: {
+                ...geminiAnalysis,
+                rta_verification: comparisonResult
+              }
+            }
+          : img
+      ));
+
+      // Update the challan in context with complete analysis results
+      const completeAnalysis = {
+        ...geminiAnalysis,
+        rta_verification: comparisonResult
+      };
+      updateChallanWithAnalysis(imageFile.challanId, completeAnalysis);
+
+      // Auto-remove from local state after 5 seconds (moved to review queue)
       setTimeout(() => {
         setAnalyzedImages(prev => prev.filter(img => img.id !== imageFile.id));
-      }, 3000);
+      }, 5000);
 
     } catch (error) {
-      console.error('💥 Gemini analysis failed:', error);
+      console.error('💥 Enhanced analysis failed:', error);
       
       setAnalyzedImages(prev => prev.map(img => 
         img.id === imageFile.id 
           ? { 
               ...img, 
               status: 'error', 
-              error: error instanceof Error ? error.message : 'Analysis failed',
-              analysis: undefined
+              geminiStatus: 'error',
+              rtaStatus: 'error',
+              comparisonStatus: 'skipped',
+              error: error instanceof Error ? error.message : 'Analysis failed'
             }
           : img
       ));
@@ -92,6 +170,44 @@ const ImageIntake: React.FC = () => {
       // Update challan status to rejected (system error)
       updateChallanStatus(imageFile.challanId, 'rejected');
     }
+  };
+
+  // Helper function to compare RTA data with AI detected vehicle details
+  const performVehicleComparison = async (rtaData: any, aiDetected: any) => {
+    if (!rtaData || !aiDetected) return null;
+
+    // Simple comparison logic (can be enhanced)
+    const makeMatch = rtaData.make && aiDetected.make ? 
+      rtaData.make.toLowerCase().includes(aiDetected.make.toLowerCase()) ||
+      aiDetected.make.toLowerCase().includes(rtaData.make.toLowerCase()) : false;
+    
+    const modelMatch = rtaData.model && aiDetected.model ? 
+      rtaData.model.toLowerCase().includes(aiDetected.model.toLowerCase()) ||
+      aiDetected.model.toLowerCase().includes(rtaData.model.toLowerCase()) : false;
+    
+    const colorMatch = rtaData.color && aiDetected.color ? 
+      rtaData.color.toLowerCase().includes(aiDetected.color.toLowerCase()) ||
+      aiDetected.color.toLowerCase().includes(rtaData.color.toLowerCase()) : false;
+
+    const matchCount = [makeMatch, modelMatch, colorMatch].filter(Boolean).length;
+    const overallMatch = matchCount >= 2; // At least 2 out of 3 should match
+
+    return {
+      registration_number: rtaData.registrationNumber || rtaData.regNo,
+      status: 'verified',
+      matches: overallMatch,
+      confidence_scores: {
+        make: makeMatch ? 0.9 : 0.1,
+        model: modelMatch ? 0.9 : 0.1,
+        color: colorMatch ? 0.9 : 0.1,
+      },
+      overall_score: matchCount / 3,
+      comparison_details: {
+        make: { rta: rtaData.make, ai: aiDetected.make, match: makeMatch },
+        model: { rta: rtaData.model, ai: aiDetected.model, match: modelMatch },
+        color: { rta: rtaData.color, ai: aiDetected.color, match: colorMatch }
+      }
+    };
   };
 
   const processFiles = (files: File[]) => {
@@ -103,7 +219,11 @@ const ImageIntake: React.FC = () => {
         challanId,
         file,
         preview: URL.createObjectURL(file),
-        status: 'uploading'
+        status: 'uploading',
+        // Initialize enhanced workflow states
+        geminiStatus: 'pending',
+        rtaStatus: 'pending',
+        comparisonStatus: 'pending'
       };
     });
 
@@ -111,7 +231,7 @@ const ImageIntake: React.FC = () => {
 
     // Start analysis for each image
     newImages.forEach(imageFile => {
-      setTimeout(() => analyzeImageWithGemini(imageFile), 500);
+      setTimeout(() => enhancedImageAnalysis(imageFile), 500);
     });
   };
 
@@ -163,19 +283,42 @@ const ImageIntake: React.FC = () => {
     }
   };
 
+  const getStepIcon = (status: string) => {
+    switch (status) {
+      case 'pending':
+        return <Clock className="h-4 w-4 text-gray-400" />;
+      case 'analyzing':
+        return <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-500"></div>;
+      case 'completed':
+        return <CheckCircle className="h-4 w-4 text-green-500" />;
+      case 'error':
+        return <XCircle className="h-4 w-4 text-red-500" />;
+      case 'skipped':
+        return <AlertCircle className="h-4 w-4 text-yellow-500" />;
+      default:
+        return null;
+    }
+  };
+
   const getStatusText = (image: AnalyzedImage) => {
     switch (image.status) {
       case 'uploading':
         return 'Uploading...';
       case 'analyzing':
-        return 'Analyzing with AI...';
+        if (image.geminiStatus === 'analyzing') return 'AI Analysis in progress...';
+        if (image.rtaStatus === 'analyzing') return 'RTA Verification in progress...';
+        if (image.comparisonStatus === 'analyzing') return 'Comparing results...';
+        return 'Processing...';
       case 'completed':
-        const violationCount = image.analysis?.gemini_analysis.violations.length || 0;
-        return violationCount > 0 ? 
-          `${violationCount} violation(s) detected → Moving to review` : 
-          'No violations → Auto-approved';
+        const violationCount = image.analysis?.gemini_analysis?.violations?.length || 0;
+        const isMatched = image.comparisonResult?.matches;
+        if (violationCount > 0) {
+          return `${violationCount} violation(s) detected ${isMatched !== undefined ? (isMatched ? '✓ Verified' : '⚠ Mismatch') : ''} → Moving to review`;
+        } else {
+          return `No violations ${isMatched !== undefined ? (isMatched ? '✓ Verified' : '⚠ Mismatch') : ''} → Auto-approved`;
+        }
       case 'error':
-        return `Error: ${image.error}`;
+        return `Analysis failed`;
       default:
         return 'Unknown';
     }
@@ -308,21 +451,21 @@ const ImageIntake: React.FC = () => {
                 {analyzedImages.map((image) => (
                   <div
                     key={image.id}
-                    className="border border-gray-200 rounded-lg p-4 bg-white"
+                    className="border border-gray-200 rounded-lg p-6 bg-white"
                   >
-                    <div className="flex items-center space-x-4">
+                    <div className="flex items-start space-x-4">
                       {/* Image Preview */}
                       <div className="flex-shrink-0">
                         <img
                           src={image.preview}
                           alt="Traffic image"
-                          className="w-16 h-16 object-cover rounded-lg"
+                          className="w-20 h-20 object-cover rounded-lg border border-gray-200"
                         />
                       </div>
                       
-                      {/* Analysis Status */}
+                      {/* Enhanced Analysis Workflow */}
                       <div className="flex-1 min-w-0">
-                        <div className="flex items-center justify-between">
+                        <div className="flex items-center justify-between mb-4">
                           <h4 className="text-sm font-medium text-gray-900 truncate">
                             {image.file.name}
                           </h4>
@@ -337,10 +480,80 @@ const ImageIntake: React.FC = () => {
                           </div>
                         </div>
 
+                        {/* Three-Step Workflow Display */}
+                        <div className="space-y-3">
+                          {/* Step 1: Gemini AI Analysis */}
+                          <div className="flex items-center space-x-3">
+                            {getStepIcon(image.geminiStatus)}
+                            <div className="flex-1">
+                              <div className="text-sm font-medium text-gray-900">
+                                1. AI Vehicle Analysis
+                                {image.geminiStatus === 'completed' && image.detectedPlateNumber && (
+                                  <span className="ml-2 text-blue-600">→ Plate: {image.detectedPlateNumber}</span>
+                                )}
+                              </div>
+                              {image.geminiStatus === 'completed' && image.geminiData && (
+                                <div className="text-xs text-gray-500 mt-1">
+                                  {image.geminiData.violations?.length || 0} violations detected, 
+                                  Vehicle: {image.geminiData.vehicle_details?.make} {image.geminiData.vehicle_details?.model}
+                                </div>
+                              )}
+                            </div>
+                          </div>
+
+                          {/* Step 2: RTA Database Lookup */}
+                          <div className="flex items-center space-x-3">
+                            {getStepIcon(image.rtaStatus)}
+                            <div className="flex-1">
+                              <div className="text-sm font-medium text-gray-900">
+                                2. RTA Database Verification
+                                {image.rtaStatus === 'skipped' && (
+                                  <span className="ml-2 text-yellow-600">→ No plate detected</span>
+                                )}
+                                {image.rtaStatus === 'completed' && image.rtaData && (
+                                  <span className="ml-2 text-green-600">→ Vehicle found</span>
+                                )}
+                              </div>
+                              {image.rtaStatus === 'completed' && image.rtaData && (
+                                <div className="text-xs text-gray-500 mt-1">
+                                  Owner: {image.rtaData.ownerName}, Make: {image.rtaData.make} {image.rtaData.model}
+                                </div>
+                              )}
+                            </div>
+                          </div>
+
+                          {/* Step 3: Comparison & Verification */}
+                          <div className="flex items-center space-x-3">
+                            {getStepIcon(image.comparisonStatus)}
+                            <div className="flex-1">
+                              <div className="text-sm font-medium text-gray-900">
+                                3. AI vs RTA Comparison
+                                {image.comparisonStatus === 'completed' && image.comparisonResult && (
+                                  <span className={`ml-2 ${image.comparisonResult.matches ? 'text-green-600' : 'text-red-600'}`}>
+                                    → {image.comparisonResult.matches ? 'Verified' : 'Mismatch detected'}
+                                  </span>
+                                )}
+                              </div>
+                              {image.comparisonStatus === 'completed' && image.comparisonResult && (
+                                <div className="text-xs text-gray-500 mt-1">
+                                  Match Score: {Math.round(image.comparisonResult.overall_score * 100)}%
+                                  {image.comparisonResult.comparison_details && (
+                                    <span className="ml-2">
+                                      Make: {image.comparisonResult.comparison_details.make.match ? '✓' : '✗'},
+                                      Model: {image.comparisonResult.comparison_details.model.match ? '✓' : '✗'},
+                                      Color: {image.comparisonResult.comparison_details.color.match ? '✓' : '✗'}
+                                    </span>
+                                  )}
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+
                         {/* Error Message */}
                         {image.error && (
-                          <div className="mt-2 text-sm text-red-600 bg-red-50 p-2 rounded">
-                            {image.error}
+                          <div className="mt-3 text-sm text-red-600 bg-red-50 p-3 rounded border border-red-200">
+                            <strong>Error:</strong> {image.error}
                           </div>
                         )}
                       </div>
@@ -353,7 +566,7 @@ const ImageIntake: React.FC = () => {
                 <div className="flex items-center">
                   <Eye className="h-5 w-5 text-blue-500 mr-2" />
                   <span className="text-sm text-blue-700">
-                    Completed analyses automatically move to "Review Challans" tab for officer review.
+                    <strong>Enhanced Analysis Pipeline:</strong> Each image goes through AI analysis → RTA verification → comparison validation before moving to officer review.
                   </span>
                 </div>
               </div>

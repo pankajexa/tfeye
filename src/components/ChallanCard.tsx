@@ -52,30 +52,81 @@ const ChallanCard: React.FC<ChallanCardProps> = ({
     }
   };
 
-  // Helper function to create vehicle matches display from Gemini data
+  // Helper function to create vehicle matches display from Gemini data and RTA verification
   const createVehicleMatches = () => {
-    if (!challan.vehicleDetails || !challan.rtaVerification) {
+    if (!challan.vehicleDetails) {
       return [];
     }
 
+    // Use RTA verification comparison details from the full Gemini analysis if available
+    if (challan.geminiAnalysis?.rta_verification && (challan.geminiAnalysis.rta_verification as any).comparison_details) {
+      const details = (challan.geminiAnalysis.rta_verification as any).comparison_details;
+      return [
+        {
+          field: 'Make',
+          rtaData: details.make?.rta || 'Not Available',
+          aiDetected: details.make?.ai || challan.vehicleDetails.make,
+          match: details.make?.match || false
+        },
+        {
+          field: 'Model', 
+          rtaData: details.model?.rta || 'Not Available',
+          aiDetected: details.model?.ai || challan.vehicleDetails.model,
+          match: details.model?.match || false
+        },
+        {
+          field: 'Color',
+          rtaData: details.color?.rta || 'Not Available',
+          aiDetected: details.color?.ai || challan.vehicleDetails.color,
+          match: details.color?.match || false
+        }
+      ];
+    }
+
+    // Fallback: Use basic RTA verification data if available
+    if (challan.geminiAnalysis?.rta_verification) {
+      const rtaData = challan.geminiAnalysis.rta_verification;
+      return [
+        {
+          field: 'Make',
+          rtaData: `RTA Verified (${rtaData.status})`,
+          aiDetected: challan.vehicleDetails.make,
+          match: rtaData.matches || false
+        },
+        {
+          field: 'Model', 
+          rtaData: `RTA Verified (${rtaData.status})`,
+          aiDetected: challan.vehicleDetails.model,
+          match: rtaData.matches || false
+        },
+        {
+          field: 'Color',
+          rtaData: `RTA Verified (${rtaData.status})`,
+          aiDetected: challan.vehicleDetails.color,
+          match: rtaData.matches || false
+        }
+      ];
+    }
+
+    // Final fallback: Show pending status
     return [
       {
         field: 'Make',
-        rtaData: 'Not Available', // Would need RTA API integration
+        rtaData: 'RTA Lookup Pending',
         aiDetected: challan.vehicleDetails.make,
-        match: challan.rtaVerification.matches
+        match: false
       },
       {
         field: 'Model', 
-        rtaData: 'Not Available',
+        rtaData: 'RTA Lookup Pending',
         aiDetected: challan.vehicleDetails.model,
-        match: challan.rtaVerification.matches
+        match: false
       },
       {
         field: 'Color',
-        rtaData: 'Not Available', 
+        rtaData: 'RTA Lookup Pending',
         aiDetected: challan.vehicleDetails.color,
-        match: challan.rtaVerification.matches
+        match: false
       }
     ];
   };

@@ -67,11 +67,11 @@ export class RTAService {
     console.log('📡 Backend Endpoint:', BACKEND_API_CONFIG.baseUrl);
 
     try {
-      // Validate registration number format
+      // Basic validation - just ensure it's reasonable input
       if (!this.validateRegistrationNumber(registrationNumber)) {
         return {
           success: false,
-          error: 'Invalid registration number format',
+          error: 'Registration number must be between 3 and 20 characters',
           errorCode: 'INVALID_FORMAT'
         };
       }
@@ -204,11 +204,11 @@ export class RTAService {
       // This will likely fail from localhost due to IP whitelisting
       // Keeping the original implementation for reference
       
-      // Validate registration number format
+      // Basic validation - just ensure it's reasonable input
       if (!this.validateRegistrationNumber(registrationNumber)) {
         return {
           success: false,
-          error: 'Invalid registration number format',
+          error: 'Registration number must be between 3 and 20 characters',
           errorCode: 'INVALID_FORMAT'
         };
       }
@@ -403,17 +403,13 @@ export class RTAService {
   }
 
   /**
-   * Validate Indian vehicle registration number format
+   * Validate vehicle registration number - minimal validation, let backend/API validate format
    */
   private static validateRegistrationNumber(regNumber: string): boolean {
-    // Indian registration format: XX##XX#### or XX##X#### (where X = letter, # = digit)
-    const patterns = [
-      /^[A-Z]{2}\d{2}[A-Z]{1,2}\d{4}$/,  // Standard format
-      /^[A-Z]{2}\d{1,2}[A-Z]{1,2}\d{1,4}$/ // Flexible format for older vehicles
-    ];
-    
-    const cleanRegNumber = regNumber.replace(/\s+/g, '').toUpperCase();
-    return patterns.some(pattern => pattern.test(cleanRegNumber));
+    // Minimal validation - just ensure it's not empty and has reasonable content
+    // Let TSeChallan API validate the actual format since registration formats vary widely
+    const cleanRegNumber = regNumber.trim();
+    return cleanRegNumber.length >= 3 && cleanRegNumber.length <= 20;
   }
 
   /**
