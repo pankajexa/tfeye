@@ -61,9 +61,37 @@ const ImageIntake: React.FC = () => {
       
       console.log('✅ Analysis completed:', stepAnalysisResponse);
 
-      // Extract simplified results
+      // Check Step 1 quality assessment first
+      const step1Data = stepAnalysisResponse.results.step1?.data;
+      
+      // If image quality is bad, immediately reject
+      if (step1Data?.response_type === 'bad_quality') {
+        console.log('🚫 Image rejected due to poor quality');
+        
+        setAnalyzedImages(prev => prev.map(img => 
+          img.id === imageFile.id 
+            ? { 
+                ...img, 
+                status: 'completed' as const,
+                stepAnalysisResponse,
+                error: 'Image quality too poor for analysis'
+              } as AnalyzedImage
+            : img
+        ));
+
+        // Update challan status to rejected (poor quality)
+        updateChallanStatus(imageFile.challanId, 'rejected');
+        
+        // Auto-remove from local state after 5 seconds
+        setTimeout(() => {
+          setAnalyzedImages(prev => prev.filter(img => img.id !== imageFile.id));
+        }, 5000);
+        
+        return;
+      }
+
+      // Extract simplified results for good quality images
       const results = stepAnalysisResponse.results;
-      const step1Data = results.step1?.data;
       const step2Data = results.step2?.data;
       const step6Data = results.step6?.data;
       const step5Data = results.step5?.data;
@@ -177,6 +205,10 @@ const ImageIntake: React.FC = () => {
       case 'analyzing':
         return <div className="animate-pulse"><Eye className="h-5 w-5 text-blue-500" /></div>;
       case 'completed':
+        // Check if image was rejected due to poor quality
+        if (image.error && image.error.includes('Image quality too poor')) {
+          return <XCircle className="h-5 w-5 text-red-500" />;
+        }
         return <CheckCircle className="h-5 w-5 text-green-500" />;
       case 'error':
         return <XCircle className="h-5 w-5 text-red-500" />;
@@ -191,6 +223,11 @@ const ImageIntake: React.FC = () => {
     if (image.status === 'analyzing') return 'Analyzing image...';
     
     if (image.status === 'completed') {
+      // Check if image was rejected due to poor quality
+      if (image.error && image.error.includes('Image quality too poor')) {
+        return 'Rejected → Image quality too poor for analysis';
+      }
+      
       const violationCount = image.violationCount || 0;
       
       if (violationCount > 0) {
@@ -211,6 +248,11 @@ const ImageIntake: React.FC = () => {
       case 'analyzing':
         return 'bg-yellow-100 text-yellow-800';
       case 'completed':
+        // Check if image was rejected due to poor quality
+        if (image.error && image.error.includes('Image quality too poor')) {
+          return 'bg-red-100 text-red-800';
+        }
+        
         const violationCount = image.violationCount || 0;
         return violationCount > 0 ? 'bg-orange-100 text-orange-800' : 'bg-green-100 text-green-800';
       case 'error':

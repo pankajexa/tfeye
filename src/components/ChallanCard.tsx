@@ -335,7 +335,7 @@ const ChallanCard: React.FC<ChallanCardProps> = ({
           <div className="flex items-center justify-between">
             <h4 className="text-sm font-medium text-gray-900 flex items-center">
               <Car className="h-4 w-4 mr-2" />
-              Vehicle & RTA Verification
+              Vehicle & RTA Data
             </h4>
             {challan.vehicleComparison && (
               <div className="flex items-center space-x-2">
@@ -362,10 +362,10 @@ const ChallanCard: React.FC<ChallanCardProps> = ({
                     RTA Data
                   </th>
                   <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    AI Detected
+                    Detected
                   </th>
                   <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Match
+                    Status
                   </th>
                 </tr>
               </thead>
@@ -385,12 +385,7 @@ const ChallanCard: React.FC<ChallanCardProps> = ({
                       {match.match ? (
                         <CheckCircle className="h-5 w-5 text-green-500" />
                       ) : (
-                        <div className="flex items-center space-x-2">
-                          <XCircle className="h-5 w-5 text-red-500" />
-                          <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-red-100 text-red-800">
-                            Mismatch
-                          </span>
-                        </div>
+                        <XCircle className="h-5 w-5 text-red-500" />
                       )}
                     </td>
                   </tr>
@@ -399,38 +394,45 @@ const ChallanCard: React.FC<ChallanCardProps> = ({
             </table>
           </div>
 
-          {/* Simplified Verification Status */}
+          {/* Simplified Status */}
           {challan.vehicleComparison ? (
-            <div className="bg-white p-4 rounded border border-gray-200">
-              <div className="flex items-center space-x-2">
-                <CheckCircle className="h-5 w-5 text-green-500" />
-                <span className="text-sm font-medium">
-                  Vehicle Verification: {challan.vehicleComparison.overall_verdict === 'MATCH' ? 'Verified' :
-                   challan.vehicleComparison.overall_verdict === 'PARTIAL_MATCH' ? 'Partial Match' : 'Mismatch'}
-                </span>
-              </div>
-              {challan.vehicleComparison.discrepancies && challan.vehicleComparison.discrepancies.length > 0 && (
-                <div className="mt-2">
-                  <span className="text-sm font-medium text-red-600">Issues Found:</span>
-                  <ul className="text-sm text-red-700 list-disc list-inside mt-1">
-                    {challan.vehicleComparison.discrepancies.map((discrepancy, index) => (
-                      <li key={index}>{discrepancy}</li>
-                    ))}
-                  </ul>
-                </div>
-              )}
+            <div className="text-center">
+              <span className={`inline-flex items-center px-4 py-2 rounded-md text-sm font-medium ${
+                challan.vehicleComparison.overall_verdict === 'MATCH' ? 'bg-green-100 text-green-800' :
+                challan.vehicleComparison.overall_verdict === 'PARTIAL_MATCH' ? 'bg-yellow-100 text-yellow-800' :
+                'bg-red-100 text-red-800'
+              }`}>
+                {challan.vehicleComparison.overall_verdict === 'MATCH' ? (
+                  <>
+                    <CheckCircle className="h-4 w-4 mr-2" />
+                    Data Verified
+                  </>
+                ) : challan.vehicleComparison.overall_verdict === 'PARTIAL_MATCH' ? (
+                  <>
+                    <AlertTriangle className="h-4 w-4 mr-2" />
+                    Partial Match
+                  </>
+                ) : (
+                  <>
+                    <XCircle className="h-4 w-4 mr-2" />
+                    Data Mismatch
+                  </>
+                )}
+              </span>
             </div>
           ) : challan.rtaVerification ? (
-            <div className="flex items-center space-x-2 text-green-600">
-              <CheckCircle className="h-5 w-5" />
-              <span className="text-sm font-medium">
-                RTA Status: {challan.rtaVerification.status}
+            <div className="text-center">
+              <span className="inline-flex items-center px-4 py-2 rounded-md text-sm font-medium bg-green-100 text-green-800">
+                <CheckCircle className="h-4 w-4 mr-2" />
+                RTA Verified
               </span>
             </div>
           ) : (
-            <div className="flex items-center space-x-2 text-gray-600">
-              <AlertTriangle className="h-5 w-5" />
-              <span className="text-sm font-medium">Vehicle Verification Pending</span>
+            <div className="text-center">
+              <span className="inline-flex items-center px-4 py-2 rounded-md text-sm font-medium bg-gray-100 text-gray-600">
+                <AlertTriangle className="h-4 w-4 mr-2" />
+                Verification Pending
+              </span>
             </div>
           )}
         </div>
