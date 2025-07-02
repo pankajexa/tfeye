@@ -11,7 +11,6 @@ import {
   ChevronRight,
   AlertTriangle,
   ShieldAlert,
-  Target,
   Eye
 } from 'lucide-react';
 import { Challan } from '../context/ChallanContext';
@@ -119,18 +118,15 @@ const ChallanCard: React.FC<ChallanCardProps> = ({
 
   const vehicleMatches = createVehicleMatches();
 
-  // Get violation badge color based on violation type
-  const getViolationBadge = (violationType: string, severity?: string) => {
+  // Get violation badge color
+  const getViolationBadge = (violationType: string) => {
     const colors = {
       'No Helmet': 'bg-red-100 text-red-800 border-red-200',
       'Cell Phone Driving': 'bg-orange-100 text-orange-800 border-orange-200',
       'Triple Riding': 'bg-purple-100 text-purple-800 border-purple-200'
     };
     
-    const baseColor = colors[violationType as keyof typeof colors] || 'bg-gray-100 text-gray-800 border-gray-200';
-    const severityIndicator = severity === 'High' ? 'ring-2 ring-red-300' : severity === 'Medium' ? 'ring-1 ring-yellow-300' : '';
-    
-    return `${baseColor} ${severityIndicator}`;
+    return colors[violationType as keyof typeof colors] || 'bg-gray-100 text-gray-800 border-gray-200';
   };
 
   return (
@@ -175,120 +171,59 @@ const ChallanCard: React.FC<ChallanCardProps> = ({
           </div>
         </div>
 
-        {/* Step 6 Violation Analysis Results */}
+        {/* Simplified Violation Detection Results */}
         {challan.violationAnalysis && (
           <div className="space-y-3">
             <h4 className="text-sm font-medium text-gray-900 flex items-center">
               <ShieldAlert className="h-4 w-4 mr-2" />
-              Step 6: AI Violation Detection Results
+              AI Violation Detection
             </h4>
             <div className="bg-gray-50 p-4 rounded-lg space-y-4">
-              {/* Overall Assessment */}
-              <div className="grid grid-cols-2 gap-4 text-sm">
-                <div>
-                  <span className="font-medium text-gray-600">Total Violations:</span>
-                  <p className="text-gray-900 font-semibold">{challan.violationAnalysis.overall_assessment.total_violations}</p>
-                </div>
-                <div>
-                  <span className="font-medium text-gray-600">Analysis Confidence:</span>
-                  <p className="text-gray-900">{Math.round(challan.violationAnalysis.overall_assessment.analysis_confidence * 100)}%</p>
-                </div>
-                <div>
-                  <span className="font-medium text-gray-600">Image Clarity:</span>
-                  <p className="text-gray-900 capitalize">{challan.violationAnalysis.overall_assessment.image_clarity_for_detection}</p>
-                </div>
-                <div>
-                  <span className="font-medium text-gray-600">Enforcement Action:</span>
-                  <p className={`font-medium ${
-                    challan.violationAnalysis.enforcement_recommendation.action === 'ISSUE_CHALLAN' ? 'text-red-600' :
-                    challan.violationAnalysis.enforcement_recommendation.action === 'REVIEW_REQUIRED' ? 'text-orange-600' :
-                    'text-green-600'
-                  }`}>
-                    {challan.violationAnalysis.enforcement_recommendation.action.replace('_', ' ')}
-                  </p>
-                </div>
+              {/* Overall Status */}
+              <div className="flex items-center justify-between">
+                <span className="text-sm font-medium text-gray-600">Detection Status:</span>
+                <span className={`px-3 py-1 rounded-full text-sm font-medium ${
+                  challan.violationAnalysis.overall_assessment.total_violations > 0 
+                    ? 'bg-red-100 text-red-800' 
+                    : 'bg-green-100 text-green-800'
+                }`}>
+                  {challan.violationAnalysis.overall_assessment.total_violations > 0 
+                    ? `${challan.violationAnalysis.overall_assessment.total_violations} Violation(s) Detected`
+                    : 'No Violations Detected'
+                  }
+                </span>
               </div>
 
               {/* Detected Violations */}
-              <div>
-                <span className="text-sm font-medium text-gray-600">Detected Violations:</span>
-                <div className="mt-2 space-y-3">
-                  {challan.violationAnalysis.violations_detected.map((violation, index) => (
-                    <div
-                      key={index}
-                      className={`p-3 rounded-lg border ${
-                        violation.detected 
-                          ? 'bg-white border-red-200' 
-                          : 'bg-gray-100 border-gray-200 opacity-60'
-                      }`}
-                    >
-                      <div className="flex items-center justify-between mb-2">
-                        <span className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-medium border ${
-                          violation.detected ? getViolationBadge(violation.violation_type, violation.severity) : 'bg-gray-100 text-gray-600 border-gray-200'
-                        }`}>
-                          {violation.detected && <ShieldAlert className="w-4 h-4 mr-1" />}
+              {challan.violationAnalysis.violations_detected.some(v => v.detected) && (
+                <div>
+                  <span className="text-sm font-medium text-gray-600">Violations Found:</span>
+                  <div className="mt-2 flex flex-wrap gap-2">
+                    {challan.violationAnalysis.violations_detected
+                      .filter(violation => violation.detected)
+                      .map((violation, index) => (
+                        <span
+                          key={index}
+                          className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-medium border ${getViolationBadge(violation.violation_type)}`}
+                        >
+                          <ShieldAlert className="w-4 h-4 mr-1" />
                           {violation.violation_type}
                         </span>
-                        <div className="flex items-center space-x-2">
-                          {violation.detected ? (
-                            <CheckCircle className="h-5 w-5 text-red-500" />
-                          ) : (
-                            <XCircle className="h-5 w-5 text-gray-400" />
-                          )}
-                          <span className="text-sm font-medium">
-                            {Math.round(violation.confidence * 100)}% confidence
-                          </span>
-                        </div>
-                      </div>
-                      {violation.detected && (
-                        <div className="space-y-1">
-                          <p className="text-sm text-gray-900">
-                            <strong>Description:</strong> {violation.description}
-                          </p>
-                          <p className="text-sm text-gray-700">
-                            <strong>Reasoning:</strong> {violation.reasoning}
-                          </p>
-                          <p className="text-sm">
-                            <strong>Severity:</strong> 
-                            <span className={`ml-1 px-2 py-1 rounded text-xs font-medium ${
-                              violation.severity === 'High' ? 'bg-red-100 text-red-700' :
-                              violation.severity === 'Medium' ? 'bg-yellow-100 text-yellow-700' :
-                              'bg-blue-100 text-blue-700'
-                            }`}>
-                              {violation.severity}
-                            </span>
-                          </p>
-                        </div>
-                      )}
-                    </div>
-                  ))}
+                      ))}
+                  </div>
                 </div>
-              </div>
+              )}
 
-              {/* Enforcement Recommendation */}
-              <div className="bg-white p-3 rounded border border-gray-200">
-                <div className="flex items-center space-x-2 mb-2">
-                  <Target className="h-4 w-4 text-blue-500" />
-                  <span className="text-sm font-medium text-gray-900">Enforcement Recommendation</span>
-                </div>
-                <div className="space-y-1 text-sm">
-                  <p>
-                    <strong>Priority:</strong> 
-                    <span className={`ml-1 px-2 py-1 rounded text-xs font-medium ${
-                      challan.violationAnalysis.enforcement_recommendation.priority === 'High' ? 'bg-red-100 text-red-700' :
-                      challan.violationAnalysis.enforcement_recommendation.priority === 'Medium' ? 'bg-yellow-100 text-yellow-700' :
-                      'bg-green-100 text-green-700'
-                    }`}>
-                      {challan.violationAnalysis.enforcement_recommendation.priority}
-                    </span>
-                  </p>
-                  <p><strong>Notes:</strong> {challan.violationAnalysis.enforcement_recommendation.notes}</p>
-                </div>
-              </div>
-
-              {/* Summary */}
-              <div className="text-sm text-gray-600 italic">
-                {challan.violationAnalysis.overall_assessment.violation_summary}
+              {/* Enforcement Action */}
+              <div className="flex items-center justify-between">
+                <span className="text-sm font-medium text-gray-600">Recommended Action:</span>
+                <span className={`px-3 py-1 rounded-full text-sm font-medium ${
+                  challan.violationAnalysis.enforcement_recommendation.action === 'ISSUE_CHALLAN' ? 'bg-red-100 text-red-800' :
+                  challan.violationAnalysis.enforcement_recommendation.action === 'REVIEW_REQUIRED' ? 'bg-orange-100 text-orange-800' :
+                  'bg-green-100 text-green-800'
+                }`}>
+                  {challan.violationAnalysis.enforcement_recommendation.action.replace('_', ' ')}
+                </span>
               </div>
             </div>
           </div>
@@ -380,71 +315,27 @@ const ChallanCard: React.FC<ChallanCardProps> = ({
               </div>
             </div>
 
-            {/* Enhanced Quality Assessment & License Plate Extraction */}
-            {(challan.qualityCategory || challan.qualityAssessment) && (
+            {/* Simplified License Plate Display */}
+            {challan.plateNumber && (
               <div className="space-y-3">
                 <h4 className="text-sm font-medium text-gray-900 flex items-center">
                   <Eye className="h-4 w-4 mr-2" />
-                  Step 1: Enhanced Quality Assessment + License Plate Extraction
+                  License Plate
                 </h4>
-                <div className="bg-gray-50 p-3 rounded-lg space-y-2">
-                  <div className="flex items-center justify-between">
-                    <span className="text-sm font-medium text-gray-600">Image Quality:</span>
-                    <span className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-medium ${
-                      (challan.qualityCategory || challan.qualityAssessment?.quality_category) === 'GOOD' ? 'bg-green-100 text-green-800' :
-                      (challan.qualityCategory || challan.qualityAssessment?.quality_category) === 'NEEDS_BETTER_REVIEW' ? 'bg-yellow-100 text-yellow-800' :
-                      'bg-red-100 text-red-800'
-                    }`}>
-                      {(challan.qualityCategory || challan.qualityAssessment?.quality_category)?.replace('_', ' ')}
-                    </span>
-                  </div>
-                  
-                  {challan.qualityAssessment && (
-                    <div className="grid grid-cols-2 gap-2 text-sm">
-                      <div>
-                        <span className="font-medium text-gray-600">Analysis Confidence:</span>
-                        <p className="text-gray-900">{Math.round((challan.qualityAssessment.confidence || 0) * 100)}%</p>
-                      </div>
-                      <div>
-                        <span className="font-medium text-gray-600">Suitable for Analysis:</span>
-                        <p className={`font-medium ${challan.qualityAssessment.suitable_for_analysis ? 'text-green-600' : 'text-red-600'}`}>
-                          {challan.qualityAssessment.suitable_for_analysis ? 'Yes' : 'No'}
-                        </p>
-                      </div>
-                    </div>
-                  )}
-                  
-                  {challan.plateNumber && (
-                    <div className="border-t border-gray-200 pt-2">
-                      <div className="flex items-center justify-between">
-                        <span className="text-sm font-medium text-gray-600">License Plate Extracted:</span>
-                        <span className="text-blue-600 font-mono font-medium">{challan.plateNumber}</span>
-                      </div>
-                      {challan.qualityAssessment?.extraction_confidence && (
-                        <div className="text-sm text-gray-600 mt-1">
-                          Extraction Confidence: {Math.round(challan.qualityAssessment.extraction_confidence * 100)}%
-                        </div>
-                      )}
-                    </div>
-                  )}
-                  
-                  {challan.qualityAssessment?.reasoning && (
-                    <div className="text-sm text-gray-600 italic border-t border-gray-200 pt-2">
-                      <strong>Analysis Notes:</strong> {challan.qualityAssessment.reasoning}
-                    </div>
-                  )}
+                <div className="bg-gray-50 p-3 rounded-lg">
+                  <span className="text-blue-600 font-mono font-medium text-lg">{challan.plateNumber}</span>
                 </div>
               </div>
             )}
           </div>
         </div>
 
-        {/* Enhanced Vehicle & RTA Matching */}
+        {/* Simplified Vehicle & RTA Matching */}
         <div className="space-y-3">
           <div className="flex items-center justify-between">
             <h4 className="text-sm font-medium text-gray-900 flex items-center">
               <Car className="h-4 w-4 mr-2" />
-              Step 5: Vehicle & RTA Matching Section
+              Vehicle & RTA Verification
             </h4>
             {challan.vehicleComparison && (
               <div className="flex items-center space-x-2">
@@ -453,10 +344,8 @@ const ChallanCard: React.FC<ChallanCardProps> = ({
                   challan.vehicleComparison.overall_verdict === 'PARTIAL_MATCH' ? 'bg-yellow-100 text-yellow-800' :
                   'bg-red-100 text-red-800'
                 }`}>
-                  {challan.vehicleComparison.overall_verdict}
-                </span>
-                <span className="text-sm text-gray-600">
-                  {Math.round(challan.vehicleComparison.confidence_score * 100)}% confidence
+                  {challan.vehicleComparison.overall_verdict === 'MATCH' ? 'Verified' :
+                   challan.vehicleComparison.overall_verdict === 'PARTIAL_MATCH' ? 'Partial Match' : 'Mismatch'}
                 </span>
               </div>
             )}
@@ -510,61 +399,48 @@ const ChallanCard: React.FC<ChallanCardProps> = ({
             </table>
           </div>
 
-          {/* Enhanced Comparison Results */}
+          {/* Simplified Verification Status */}
           {challan.vehicleComparison ? (
             <div className="bg-white p-4 rounded border border-gray-200">
-              <div className="space-y-3">
-                <div className="flex items-center space-x-2">
-                  <CheckCircle className="h-5 w-5 text-green-500" />
-                  <span className="text-sm font-medium">
-                    Step 5 AI Comparison: {challan.vehicleComparison.overall_verdict} 
-                    ({Math.round(challan.vehicleComparison.confidence_score * 100)}% confidence)
-                  </span>
-                </div>
-                <p className="text-sm text-gray-700">{challan.vehicleComparison.explanation}</p>
-                {challan.vehicleComparison.discrepancies && challan.vehicleComparison.discrepancies.length > 0 && (
-                  <div className="mt-2">
-                    <span className="text-sm font-medium text-red-600">Discrepancies:</span>
-                    <ul className="text-sm text-red-700 list-disc list-inside mt-1">
-                      {challan.vehicleComparison.discrepancies.map((discrepancy, index) => (
-                        <li key={index}>{discrepancy}</li>
-                      ))}
-                    </ul>
-                  </div>
-                )}
-                <div className="text-sm">
-                  <strong>Verification Recommendation:</strong> 
-                  <span className={`ml-1 px-2 py-1 rounded text-xs font-medium ${
-                    challan.vehicleComparison.verification_recommendation === 'APPROVE' ? 'bg-green-100 text-green-700' :
-                    challan.vehicleComparison.verification_recommendation === 'REVIEW' ? 'bg-yellow-100 text-yellow-700' :
-                    'bg-red-100 text-red-700'
-                  }`}>
-                    {challan.vehicleComparison.verification_recommendation}
-                  </span>
-                </div>
+              <div className="flex items-center space-x-2">
+                <CheckCircle className="h-5 w-5 text-green-500" />
+                <span className="text-sm font-medium">
+                  Vehicle Verification: {challan.vehicleComparison.overall_verdict === 'MATCH' ? 'Verified' :
+                   challan.vehicleComparison.overall_verdict === 'PARTIAL_MATCH' ? 'Partial Match' : 'Mismatch'}
+                </span>
               </div>
+              {challan.vehicleComparison.discrepancies && challan.vehicleComparison.discrepancies.length > 0 && (
+                <div className="mt-2">
+                  <span className="text-sm font-medium text-red-600">Issues Found:</span>
+                  <ul className="text-sm text-red-700 list-disc list-inside mt-1">
+                    {challan.vehicleComparison.discrepancies.map((discrepancy, index) => (
+                      <li key={index}>{discrepancy}</li>
+                    ))}
+                  </ul>
+                </div>
+              )}
             </div>
           ) : challan.rtaVerification ? (
             <div className="flex items-center space-x-2 text-green-600">
               <CheckCircle className="h-5 w-5" />
               <span className="text-sm font-medium">
-                Legacy RTA Status: {challan.rtaVerification.status} ({Math.round(challan.rtaVerification.overallScore * 100)}% match)
+                RTA Status: {challan.rtaVerification.status}
               </span>
             </div>
           ) : (
             <div className="flex items-center space-x-2 text-gray-600">
               <AlertTriangle className="h-5 w-5" />
-              <span className="text-sm font-medium">Vehicle Comparison Pending</span>
+              <span className="text-sm font-medium">Vehicle Verification Pending</span>
             </div>
           )}
         </div>
 
-        {/* Legacy Violation Details */}
+        {/* Simplified Violation Summary */}
         <div className="space-y-3">
-          <h4 className="text-sm font-medium text-gray-900">Legacy Violation Details</h4>
+          <h4 className="text-sm font-medium text-gray-900">Violation Summary</h4>
           <div className="bg-gray-50 p-4 rounded-lg space-y-3">
             <div>
-              <span className="text-sm font-medium text-gray-600">Violations:</span>
+              <span className="text-sm font-medium text-gray-600">Detected Violations:</span>
               <div className="mt-1 flex flex-wrap gap-2">
                 {challan.violations.map((violation, index) => (
                   <span
@@ -577,7 +453,7 @@ const ChallanCard: React.FC<ChallanCardProps> = ({
               </div>
             </div>
             
-            {/* Additional Details from Analysis */}
+            {/* Additional Details */}
             {challan.vehicleDetails && (
               <div className="grid grid-cols-2 gap-4 text-sm">
                 <div>
