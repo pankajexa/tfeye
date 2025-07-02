@@ -1,20 +1,65 @@
 import React, { createContext, useContext, useState, ReactNode } from 'react';
-import { GeminiAnalysisResponse } from '../services/api';
+import { WorkflowResponse } from '../services/api';
+import { ViolationAnalysis, VehicleComparison, VehicleAnalysis, WorkflowSummary, RTAData, StepAnalysisResponse, QualityAssessmentData, OCRData } from '../types';
 
-// Enhanced Challan interface that includes Gemini analysis
+// Enhanced Challan interface that includes Step 6 workflow data
 export interface Challan {
   id: string;
   originalFile: File;
   preview: string;
+  image: string;
   status: 'processing' | 'pending-review' | 'approved' | 'rejected';
   timestamp: string;
-  
-  // Gemini Analysis Results
-  geminiAnalysis?: GeminiAnalysisResponse;
-  
-  // Review Data
   plateNumber?: string;
   violations: string[];
+  sectorOfficer: {
+    psName: string;
+    cadre: string;
+    name: string;
+  };
+  capturedBy: {
+    psName: string;
+    cadre: string;
+    name: string;
+  };
+  jurisdiction: {
+    psName: string;
+    pointName: string;
+  };
+  offenceDateTime: {
+    date: string;
+    time: string;
+  };
+  vehicleMatches: Array<{
+    field: string;
+    rtaData: string;
+    aiDetected: string;
+    match: boolean;
+    confidence?: number;
+  }>;
+  driverGender: string;
+  fakePlate: boolean;
+  ownerAddress: string;
+  rtaMatched: boolean;
+  
+  // Enhanced fields for Step 6 implementation
+  rtaData?: RTAData;
+  rtaApiStatus?: 'pending' | 'success' | 'failed';
+  rtaApiError?: string;
+  
+  // NEW: Step Analysis Workflow Data
+  stepAnalysisResponse?: StepAnalysisResponse;
+  qualityAssessment?: QualityAssessmentData;
+  ocrData?: OCRData;
+  
+  // Step 6 Workflow Data (Legacy - for backward compatibility)
+  workflowSummary?: WorkflowSummary;
+  violationAnalysis?: ViolationAnalysis;
+  vehicleComparison?: VehicleComparison;
+  vehicleAnalysisData?: VehicleAnalysis;
+  qualityCategory?: string;
+  
+  // Legacy support
   vehicleDetails?: {
     make: string;
     model: string;
@@ -26,46 +71,25 @@ export interface Challan {
       color: number;
     };
   };
-  
-  // RTA Verification
   rtaVerification?: {
     status: string;
     matches: boolean;
     overallScore: number;
     registrationNumber: string;
   };
-  
-  // Review Decision
+  geminiAnalysis?: any; // Legacy Gemini response
   reviewedBy?: string;
   reviewTimestamp?: string;
   rejectionReason?: string;
-  
-  // Officer Information (for future implementation)
-  sectorOfficer?: {
-    psName: string;
-    cadre: string;
-    name: string;
-  };
-  capturedBy?: {
-    psName: string;
-    cadre: string;
-    name: string;
-  };
-  jurisdiction?: {
-    psName: string;
-    pointName: string;
-  };
-  offenceDateTime?: {
-    date: string;
-    time: string;
-  };
 }
 
 interface ChallanContextType {
   challans: Challan[];
   addChallan: (file: File) => string; // returns challan ID
   updateChallanStatus: (id: string, status: Challan['status']) => void;
-  updateChallanWithAnalysis: (id: string, analysis: GeminiAnalysisResponse) => void;
+  updateChallanWithStepAnalysis: (id: string, stepAnalysisResponse: StepAnalysisResponse) => void; // NEW
+  updateChallanWithWorkflow: (id: string, workflowResponse: WorkflowResponse) => void; // Legacy
+  updateChallanWithAnalysis: (id: string, analysis: any) => void; // Legacy support
   approveChallan: (id: string, reviewedBy: string) => void;
   rejectChallan: (id: string, reason: string, reviewedBy: string) => void;
   modifyChallan: (id: string, updates: Partial<Challan>) => void;
@@ -95,9 +119,34 @@ export const ChallanProvider: React.FC<ChallanProviderProps> = ({ children }) =>
       id,
       originalFile: file,
       preview: URL.createObjectURL(file),
+      image: URL.createObjectURL(file),
       status: 'processing',
       timestamp: new Date().toISOString(),
       violations: [],
+      plateNumber: undefined,
+      sectorOfficer: {
+        psName: 'To be assigned',
+        cadre: 'To be assigned',
+        name: 'To be assigned'
+      },
+      capturedBy: {
+        psName: 'System',
+        cadre: 'AI System',
+        name: 'AI System'
+      },
+      jurisdiction: {
+        psName: 'To be determined',
+        pointName: 'To be determined'
+      },
+      offenceDateTime: {
+        date: new Date().toLocaleDateString(),
+        time: new Date().toLocaleTimeString()
+      },
+      vehicleMatches: [],
+      driverGender: 'Unknown',
+      fakePlate: false,
+      ownerAddress: 'Unknown',
+      rtaMatched: false
     };
 
     setChallans(prev => [...prev, newChallan]);
@@ -110,28 +159,173 @@ export const ChallanProvider: React.FC<ChallanProviderProps> = ({ children }) =>
     ));
   };
 
-  const updateChallanWithAnalysis = (id: string, analysis: GeminiAnalysisResponse) => {
+  const updateChallanWithStepAnalysis = (id: string, stepAnalysisResponse: StepAnalysisResponse) => {
     setChallans(prev => prev.map(challan => {
       if (challan.id === id) {
-        const violations = analysis.gemini_analysis.violations.map(v => v.type);
+        // Extract data from the new step analysis structure
+        const step1Data = stepAnalysisResponse.results.step1?.data;
+        const step2Data = stepAnalysisResponse.results.step2?.data;
+        const step3Data = stepAnalysisResponse.results.step3?.data;
+        const step4Data = stepAnalysisResponse.results.step4?.data;
+        const step5Data = stepAnalysisResponse.results.step5?.data;
+        const step6Data = stepAnalysisResponse.results.step6?.data;
+
+        // Extract violations from Step 6 data
+        const violationAnalysis = step6Data?.violation_analysis;
+        const violations = violationAnalysis?.violation_types_found || [];
+        const detectedViolationCount = violationAnalysis?.detected_violation_count || 0;
+
+        // Determine status based on violations and comparison results
+        let newStatus: Challan['status'] = 'approved';
+        if (detectedViolationCount > 0) {
+          newStatus = 'pending-review';
+        }
+
+        // Extract vehicle comparison from Step 5
+        const vehicleComparison = step5Data?.comparison_result;
+        
+        // Create vehicle matches from Step 5 comparison data
+        const vehicleMatches = vehicleComparison ? 
+          Object.entries(vehicleComparison.parameter_analysis).map(([field, analysis]: [string, any]) => ({
+            field: field.charAt(0).toUpperCase() + field.slice(1),
+            rtaData: analysis.rta_value || 'Not Available',
+            aiDetected: analysis.ai_value || 'Not Detected',
+            match: analysis.match_status === 'MATCH',
+            confidence: vehicleComparison.confidence_score
+          })) : [];
+
+        // Extract license plate from Step 1 or Step 2
+        const extractedPlate = step1Data?.extracted_license_plate || step2Data?.license_plate;
+
+        return {
+          ...challan,
+          status: newStatus,
+          stepAnalysisResponse,
+          qualityAssessment: step1Data,
+          ocrData: step2Data,
+          plateNumber: extractedPlate || undefined,
+          violations,
+          violationAnalysis,
+          vehicleComparison,
+          vehicleAnalysisData: step4Data?.vehicle_analysis,
+          qualityCategory: step1Data?.quality_category,
+          rtaData: step3Data?.rta_data,
+          vehicleMatches,
+          rtaMatched: vehicleComparison?.overall_verdict === 'MATCH',
+          
+          // Legacy compatibility
+          vehicleDetails: step4Data?.vehicle_analysis ? {
+            make: step4Data.vehicle_analysis.make || 'Unknown',
+            model: step4Data.vehicle_analysis.model || 'Unknown',
+            color: step4Data.vehicle_analysis.color || 'Unknown',
+            vehicleType: step4Data.vehicle_analysis.vehicle_type || 'Unknown',
+            confidence: {
+              make: step4Data.vehicle_analysis.analysis_confidence || 0,
+              model: step4Data.vehicle_analysis.analysis_confidence || 0,
+              color: step4Data.vehicle_analysis.analysis_confidence || 0
+            }
+          } : undefined,
+          rtaVerification: vehicleComparison ? {
+            status: vehicleComparison.overall_verdict,
+            matches: vehicleComparison.overall_verdict === 'MATCH',
+            overallScore: vehicleComparison.confidence_score,
+            registrationNumber: extractedPlate || 'Unknown'
+          } : undefined
+        };
+      }
+      return challan;
+    }));
+  };
+
+  const updateChallanWithWorkflow = (id: string, workflowResponse: WorkflowResponse) => {
+    setChallans(prev => prev.map(challan => {
+      if (challan.id === id) {
+        const summary = workflowResponse.summary;
+        if (!summary) {
+          return { ...challan, status: 'rejected' as Challan['status'] };
+        }
+
+        // Extract violations from Step 6 data
+        const violations = summary.violation_types || [];
+        const detectedViolationCount = summary.violations_found || 0;
+
+        // Determine status based on violations and comparison results
+        let newStatus: Challan['status'] = 'approved';
+        if (detectedViolationCount > 0) {
+          newStatus = 'pending-review';
+        }
+
+        // Create vehicle matches from Step 5 comparison data
+        const vehicleMatches = summary.comparison_result ? 
+          Object.entries(summary.comparison_result.parameter_analysis).map(([field, analysis]: [string, any]) => ({
+            field: field.charAt(0).toUpperCase() + field.slice(1),
+            rtaData: analysis.rta_value || 'Not Available',
+            aiDetected: analysis.ai_value || 'Not Detected',
+            match: analysis.match_status === 'MATCH',
+            confidence: summary.comparison_result?.confidence_score
+          })) : [];
+
+        return {
+          ...challan,
+          status: newStatus,
+          plateNumber: summary.license_plate || undefined,
+          violations,
+          workflowSummary: summary,
+          violationAnalysis: summary.violation_analysis,
+          vehicleComparison: summary.comparison_result,
+          vehicleAnalysisData: summary.vehicle_analysis,
+          qualityCategory: summary.quality_category,
+          rtaData: summary.rta_data,
+          vehicleMatches,
+          rtaMatched: summary.comparison_result?.overall_verdict === 'MATCH',
+          
+          // Legacy compatibility
+          vehicleDetails: summary.vehicle_analysis ? {
+            make: summary.vehicle_analysis.make || 'Unknown',
+            model: summary.vehicle_analysis.model || 'Unknown',
+            color: summary.vehicle_analysis.color || 'Unknown',
+            vehicleType: summary.vehicle_analysis.vehicle_type || 'Unknown',
+            confidence: {
+              make: summary.vehicle_analysis.analysis_confidence || 0,
+              model: summary.vehicle_analysis.analysis_confidence || 0,
+              color: summary.vehicle_analysis.analysis_confidence || 0
+            }
+          } : undefined,
+          rtaVerification: summary.comparison_result ? {
+            status: summary.comparison_result.overall_verdict,
+            matches: summary.comparison_result.overall_verdict === 'MATCH',
+            overallScore: summary.comparison_result.confidence_score,
+            registrationNumber: summary.license_plate || 'Unknown'
+          } : undefined
+        };
+      }
+      return challan;
+    }));
+  };
+
+  // Legacy method for backward compatibility
+  const updateChallanWithAnalysis = (id: string, analysis: any) => {
+    setChallans(prev => prev.map(challan => {
+      if (challan.id === id) {
+        const violations = analysis.gemini_analysis?.violations?.map((v: any) => v.type) || [];
         
         return {
           ...challan,
           status: violations.length > 0 ? 'pending-review' : 'approved' as Challan['status'],
           geminiAnalysis: analysis,
-          plateNumber: analysis.gemini_analysis.vehicle_details.number_plate.text,
+          plateNumber: analysis.gemini_analysis?.vehicle_details?.number_plate?.text,
           violations,
-          vehicleDetails: {
+          vehicleDetails: analysis.gemini_analysis?.vehicle_details ? {
             make: analysis.gemini_analysis.vehicle_details.make,
             model: analysis.gemini_analysis.vehicle_details.model,
             color: analysis.gemini_analysis.vehicle_details.color,
             vehicleType: analysis.gemini_analysis.vehicle_details.vehicle_type,
             confidence: {
-              make: parseFloat(analysis.gemini_analysis.vehicle_details.confidence_scores.make.score.replace('%', '')),
-              model: parseFloat(analysis.gemini_analysis.vehicle_details.confidence_scores.model.score.replace('%', '')),
-              color: parseFloat(analysis.gemini_analysis.vehicle_details.confidence_scores.color.score.replace('%', ''))
+              make: parseFloat(analysis.gemini_analysis.vehicle_details.confidence_scores?.make?.score?.replace('%', '') || '0'),
+              model: parseFloat(analysis.gemini_analysis.vehicle_details.confidence_scores?.model?.score?.replace('%', '') || '0'),
+              color: parseFloat(analysis.gemini_analysis.vehicle_details.confidence_scores?.color?.score?.replace('%', '') || '0')
             }
-          },
+          } : undefined,
           rtaVerification: analysis.rta_verification ? {
             status: analysis.rta_verification.status,
             matches: analysis.rta_verification.matches,
@@ -181,6 +375,8 @@ export const ChallanProvider: React.FC<ChallanProviderProps> = ({ children }) =>
     challans,
     addChallan,
     updateChallanStatus,
+    updateChallanWithStepAnalysis,
+    updateChallanWithWorkflow,
     updateChallanWithAnalysis,
     approveChallan,
     rejectChallan,

@@ -1,6 +1,6 @@
 import React, { useState, useCallback } from 'react';
-import { Upload, CheckCircle, XCircle, Image as ImageIcon, AlertCircle, Car, Eye, Clock, ArrowRight } from 'lucide-react';
-import { apiService, GeminiAnalysisResponse } from '../services/api';
+import { Upload, CheckCircle, XCircle, Image as ImageIcon, AlertCircle, Car, Eye, Clock, ArrowRight, ShieldAlert } from 'lucide-react';
+import { apiService, StepAnalysisResponse } from '../services/api';
 import { useChallanContext } from '../context/ChallanContext';
 
 interface AnalyzedImage {
@@ -9,17 +9,22 @@ interface AnalyzedImage {
   file: File;
   preview: string;
   status: 'uploading' | 'analyzing' | 'completed' | 'error';
-  analysis?: GeminiAnalysisResponse;
+  stepAnalysisResponse?: StepAnalysisResponse;
   error?: string;
   uploadProgress?: number;
-  // Enhanced workflow states
-  geminiStatus: 'pending' | 'analyzing' | 'completed' | 'error';
-  rtaStatus: 'pending' | 'analyzing' | 'completed' | 'error' | 'skipped';
-  comparisonStatus: 'pending' | 'analyzing' | 'completed' | 'skipped';
+  // Enhanced 6-step workflow states
+  step1Status: 'pending' | 'analyzing' | 'completed' | 'error';
+  step2Status: 'pending' | 'analyzing' | 'completed' | 'error' | 'skipped';
+  step3Status: 'pending' | 'analyzing' | 'completed' | 'error' | 'skipped';
+  step4Status: 'pending' | 'analyzing' | 'completed' | 'error' | 'skipped';
+  step5Status: 'pending' | 'analyzing' | 'completed' | 'error' | 'skipped';
+  step6Status: 'pending' | 'analyzing' | 'completed' | 'error' | 'skipped';
+  qualityCategory?: string;
   detectedPlateNumber?: string;
   rtaData?: any;
-  geminiData?: any;
+  vehicleAnalysis?: any;
   comparisonResult?: any;
+  violationAnalysis?: any;
 }
 
 const ImageIntake: React.FC = () => {
@@ -27,7 +32,7 @@ const ImageIntake: React.FC = () => {
   const [isDragOver, setIsDragOver] = useState(false);
   const [backendStatus, setBackendStatus] = useState<'checking' | 'online' | 'offline'>('checking');
   
-  const { addChallan, updateChallanWithAnalysis, updateChallanStatus, getChallansByStatus } = useChallanContext();
+  const { addChallan, updateChallanWithStepAnalysis, updateChallanStatus, getChallansByStatus } = useChallanContext();
 
   // Check backend status on component mount
   React.useEffect(() => {
@@ -36,7 +41,8 @@ const ImageIntake: React.FC = () => {
 
   const checkBackendStatus = async () => {
     try {
-      await apiService.testBackendHealth();
+      const health = await apiService.testBackendHealth();
+      console.log('🏥 Backend health status:', health);
       setBackendStatus('online');
     } catch (error) {
       console.error('Backend health check failed:', error);
@@ -44,125 +50,89 @@ const ImageIntake: React.FC = () => {
     }
   };
 
-  const enhancedImageAnalysis = async (imageFile: AnalyzedImage) => {
+  const enhancedStep6Analysis = async (imageFile: AnalyzedImage) => {
     try {
-      console.log('🔍 Starting enhanced parallel analysis for:', imageFile.file.name);
+      console.log('🚀 Starting Step 6 complete workflow for:', imageFile.file.name);
       
       // Update overall status to analyzing
       setAnalyzedImages(prev => prev.map(img => 
         img.id === imageFile.id 
-          ? { ...img, status: 'analyzing', geminiStatus: 'analyzing' }
+          ? { ...img, status: 'analyzing', step1Status: 'analyzing' }
           : img
       ));
 
       // Update challan status to processing
       updateChallanStatus(imageFile.challanId, 'processing');
 
-      // Step 1: Start Gemini analysis to get vehicle details and plate number
-      console.log('📍 Step 1: Starting Gemini analysis...');
-      const geminiAnalysis = await apiService.analyzeImage(imageFile.file);
+      // Execute complete Step 6 workflow
+      console.log('📍 Starting Step 6 complete workflow...');
+      const stepAnalysisResponse = await apiService.analyzeImageStep6(imageFile.file);
       
-      console.log('✅ Gemini analysis completed:', geminiAnalysis);
+      console.log('✅ Step 6 workflow completed:', stepAnalysisResponse);
 
-      // Extract plate number from Gemini results
-      const detectedPlateNumber = geminiAnalysis.gemini_analysis?.vehicle_details?.number_plate?.text;
+      // Extract data from the new structure
+      const results = stepAnalysisResponse.results;
+      const step1Data = results.step1?.data;
+      const step2Data = results.step2?.data;
+      const step3Data = results.step3?.data;
+      const step4Data = results.step4?.data;
+      const step5Data = results.step5?.data;
+      const step6Data = results.step6?.data;
+
+      // Track individual step statuses
+      const stepStatuses = {
+        step1Status: results.step1?.success ? 'completed' as const : 'error' as const,
+        step2Status: results.step2?.success ? 'completed' as const : 
+          results.step2?.errorCode === 'POOR_IMAGE_QUALITY' || results.step2?.errorCode === 'NO_PLATE_DETECTED' ? 'skipped' as const : 'error' as const,
+        step3Status: results.step3?.success ? 'completed' as const : 
+          results.step3?.errorCode === 'NO_LICENSE_PLATE' ? 'skipped' as const : 'error' as const,
+        step4Status: results.step4?.success ? 'completed' as const : 
+          results.step4?.errorCode === 'POOR_IMAGE_QUALITY' ? 'skipped' as const : 'error' as const,
+        step5Status: results.step5?.success ? 'completed' as const : 
+          results.step5?.errorCode === 'NO_RTA_DATA' || results.step5?.errorCode === 'NO_VEHICLE_ANALYSIS' ? 'skipped' as const : 'error' as const,
+        step6Status: results.step6?.success ? 'completed' as const : 'error' as const
+      };
       
-      // Update with Gemini results
       setAnalyzedImages(prev => prev.map(img => 
         img.id === imageFile.id 
           ? { 
               ...img, 
-              geminiStatus: 'completed',
-              geminiData: geminiAnalysis.gemini_analysis,
-              detectedPlateNumber,
-              rtaStatus: detectedPlateNumber ? 'analyzing' : 'skipped'
-            }
-          : img
-      ));
-
-      let rtaData: any = null;
-      let comparisonResult: any = null;
-
-      // Step 2: If plate number detected, start RTA lookup
-      if (detectedPlateNumber) {
-        console.log('📍 Step 2: Starting RTA lookup for plate:', detectedPlateNumber);
-        
-        try {
-          const rtaResponse = await apiService.getVehicleDetails(detectedPlateNumber);
-          rtaData = rtaResponse.data;
-          
-          console.log('✅ RTA lookup completed:', rtaData);
-          
-          // Update with RTA results
-          setAnalyzedImages(prev => prev.map(img => 
-            img.id === imageFile.id 
-              ? { 
-                  ...img, 
-                  rtaStatus: 'completed',
-                  rtaData,
-                  comparisonStatus: 'analyzing'
-                }
-              : img
-          ));
-
-          // Step 3: Compare RTA data with Gemini detected details
-          console.log('📍 Step 3: Comparing RTA vs AI detected details...');
-          comparisonResult = await performVehicleComparison(rtaData, geminiAnalysis.gemini_analysis?.vehicle_details);
-          
-          console.log('✅ Comparison completed:', comparisonResult);
-
-        } catch (rtaError) {
-          console.error('⚠️ RTA lookup failed:', rtaError);
-          setAnalyzedImages(prev => prev.map(img => 
-            img.id === imageFile.id 
-              ? { ...img, rtaStatus: 'error' }
-              : img
-          ));
-        }
-      } else {
-        console.log('⚠️ No plate number detected, skipping RTA lookup');
-      }
-
-      // Final update with all results
-      setAnalyzedImages(prev => prev.map(img => 
-        img.id === imageFile.id 
-          ? { 
-              ...img, 
-              status: 'completed',
-              comparisonStatus: comparisonResult ? 'completed' : 'skipped',
-              comparisonResult,
-              analysis: {
-                ...geminiAnalysis,
-                rta_verification: comparisonResult
-              }
-            }
+              status: 'completed' as const,
+              stepAnalysisResponse,
+              ...stepStatuses,
+              qualityCategory: step1Data?.quality_category,
+              detectedPlateNumber: step1Data?.extracted_license_plate || step2Data?.license_plate,
+              rtaData: step3Data?.rta_data,
+              vehicleAnalysis: step4Data?.vehicle_analysis,
+              comparisonResult: step5Data?.comparison_result,
+              violationAnalysis: step6Data?.violation_analysis
+            } as AnalyzedImage
           : img
       ));
 
       // Update the challan in context with complete analysis results
-      const completeAnalysis = {
-        ...geminiAnalysis,
-        rta_verification: comparisonResult
-      };
-      updateChallanWithAnalysis(imageFile.challanId, completeAnalysis);
+      updateChallanWithStepAnalysis(imageFile.challanId, stepAnalysisResponse);
 
-      // Auto-remove from local state after 5 seconds (moved to review queue)
+      // Auto-remove from local state after 8 seconds (moved to review queue)
       setTimeout(() => {
         setAnalyzedImages(prev => prev.filter(img => img.id !== imageFile.id));
-      }, 5000);
+      }, 8000);
 
     } catch (error) {
-      console.error('💥 Enhanced analysis failed:', error);
+      console.error('💥 Step 6 workflow failed:', error);
       
       setAnalyzedImages(prev => prev.map(img => 
         img.id === imageFile.id 
           ? { 
               ...img, 
               status: 'error', 
-              geminiStatus: 'error',
-              rtaStatus: 'error',
-              comparisonStatus: 'skipped',
-              error: error instanceof Error ? error.message : 'Analysis failed'
+              step1Status: 'error',
+              step2Status: 'error',
+              step3Status: 'error',
+              step4Status: 'error',
+              step5Status: 'error',
+              step6Status: 'error',
+              error: error instanceof Error ? error.message : 'Step 6 workflow failed'
             }
           : img
       ));
@@ -170,44 +140,6 @@ const ImageIntake: React.FC = () => {
       // Update challan status to rejected (system error)
       updateChallanStatus(imageFile.challanId, 'rejected');
     }
-  };
-
-  // Helper function to compare RTA data with AI detected vehicle details
-  const performVehicleComparison = async (rtaData: any, aiDetected: any) => {
-    if (!rtaData || !aiDetected) return null;
-
-    // Simple comparison logic (can be enhanced)
-    const makeMatch = rtaData.make && aiDetected.make ? 
-      rtaData.make.toLowerCase().includes(aiDetected.make.toLowerCase()) ||
-      aiDetected.make.toLowerCase().includes(rtaData.make.toLowerCase()) : false;
-    
-    const modelMatch = rtaData.model && aiDetected.model ? 
-      rtaData.model.toLowerCase().includes(aiDetected.model.toLowerCase()) ||
-      aiDetected.model.toLowerCase().includes(rtaData.model.toLowerCase()) : false;
-    
-    const colorMatch = rtaData.color && aiDetected.color ? 
-      rtaData.color.toLowerCase().includes(aiDetected.color.toLowerCase()) ||
-      aiDetected.color.toLowerCase().includes(rtaData.color.toLowerCase()) : false;
-
-    const matchCount = [makeMatch, modelMatch, colorMatch].filter(Boolean).length;
-    const overallMatch = matchCount >= 2; // At least 2 out of 3 should match
-
-    return {
-      registration_number: rtaData.registrationNumber || rtaData.regNo,
-      status: 'verified',
-      matches: overallMatch,
-      confidence_scores: {
-        make: makeMatch ? 0.9 : 0.1,
-        model: modelMatch ? 0.9 : 0.1,
-        color: colorMatch ? 0.9 : 0.1,
-      },
-      overall_score: matchCount / 3,
-      comparison_details: {
-        make: { rta: rtaData.make, ai: aiDetected.make, match: makeMatch },
-        model: { rta: rtaData.model, ai: aiDetected.model, match: modelMatch },
-        color: { rta: rtaData.color, ai: aiDetected.color, match: colorMatch }
-      }
-    };
   };
 
   const processFiles = (files: File[]) => {
@@ -220,10 +152,13 @@ const ImageIntake: React.FC = () => {
         file,
         preview: URL.createObjectURL(file),
         status: 'uploading',
-        // Initialize enhanced workflow states
-        geminiStatus: 'pending',
-        rtaStatus: 'pending',
-        comparisonStatus: 'pending'
+        // Initialize 6-step workflow states
+        step1Status: 'pending',
+        step2Status: 'pending',
+        step3Status: 'pending',
+        step4Status: 'pending',
+        step5Status: 'pending',
+        step6Status: 'pending'
       };
     });
 
@@ -231,7 +166,7 @@ const ImageIntake: React.FC = () => {
 
     // Start analysis for each image
     newImages.forEach(imageFile => {
-      setTimeout(() => enhancedImageAnalysis(imageFile), 500);
+      setTimeout(() => enhancedStep6Analysis(imageFile), 500);
     });
   };
 
@@ -301,27 +236,32 @@ const ImageIntake: React.FC = () => {
   };
 
   const getStatusText = (image: AnalyzedImage) => {
-    switch (image.status) {
-      case 'uploading':
-        return 'Uploading...';
-      case 'analyzing':
-        if (image.geminiStatus === 'analyzing') return 'AI Analysis in progress...';
-        if (image.rtaStatus === 'analyzing') return 'RTA Verification in progress...';
-        if (image.comparisonStatus === 'analyzing') return 'Comparing results...';
-        return 'Processing...';
-      case 'completed':
-        const violationCount = image.analysis?.gemini_analysis?.violations?.length || 0;
-        const isMatched = image.comparisonResult?.matches;
-        if (violationCount > 0) {
-          return `${violationCount} violation(s) detected ${isMatched !== undefined ? (isMatched ? '✓ Verified' : '⚠ Mismatch') : ''} → Moving to review`;
-        } else {
-          return `No violations ${isMatched !== undefined ? (isMatched ? '✓ Verified' : '⚠ Mismatch') : ''} → Auto-approved`;
-        }
-      case 'error':
-        return `Analysis failed`;
-      default:
-        return 'Unknown';
+    if (image.status === 'uploading') return 'Uploading...';
+    if (image.status === 'error') return 'Analysis failed';
+    
+    if (image.status === 'analyzing') {
+      if (image.step1Status === 'analyzing') return 'Step 1: Quality assessment + license plate extraction...';
+      if (image.step2Status === 'analyzing') return 'Step 2: Processing OCR results...';
+      if (image.step3Status === 'analyzing') return 'Step 3: Looking up RTA data...';
+      if (image.step4Status === 'analyzing') return 'Step 4: Analyzing vehicle details...';
+      if (image.step5Status === 'analyzing') return 'Step 5: Comparing AI vs RTA data...';
+      if (image.step6Status === 'analyzing') return 'Step 6: Detecting violations...';
+      return 'Processing...';
     }
+    
+    if (image.status === 'completed') {
+      const violationCount = image.violationAnalysis?.detected_violation_count || 0;
+      const comparisonVerdict = image.comparisonResult?.overall_verdict;
+      
+      if (violationCount > 0) {
+        const violationTypes = image.violationAnalysis?.violation_types_found?.join(', ') || 'violations';
+        return `${violationCount} violation(s) detected: ${violationTypes} ${comparisonVerdict ? `(${comparisonVerdict})` : ''} → Moving to review`;
+      } else {
+        return `No violations detected ${comparisonVerdict ? `(${comparisonVerdict})` : ''} → Auto-approved`;
+      }
+    }
+    
+    return 'Unknown';
   };
 
   const getStatusColor = (image: AnalyzedImage) => {
@@ -331,13 +271,23 @@ const ImageIntake: React.FC = () => {
       case 'analyzing':
         return 'bg-yellow-100 text-yellow-800';
       case 'completed':
-        return image.analysis?.gemini_analysis.violations.length ? 
-          'bg-orange-100 text-orange-800' : 'bg-green-100 text-green-800';
+        const violationCount = image.violationAnalysis?.detected_violation_count || 0;
+        return violationCount > 0 ? 'bg-orange-100 text-orange-800' : 'bg-green-100 text-green-800';
       case 'error':
         return 'bg-red-100 text-red-800';
       default:
         return 'bg-gray-100 text-gray-800';
     }
+  };
+
+  const getViolationBadge = (violationType: string) => {
+    const colors = {
+      'No Helmet': 'bg-red-100 text-red-800',
+      'Cell Phone Driving': 'bg-orange-100 text-orange-800',
+      'Triple Riding': 'bg-purple-100 text-purple-800'
+    };
+    
+    return colors[violationType as keyof typeof colors] || 'bg-gray-100 text-gray-800';
   };
 
   // Get stats from context
@@ -351,8 +301,8 @@ const ImageIntake: React.FC = () => {
       <div className="max-w-6xl mx-auto">
         <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-8">
           <div className="text-center mb-8">
-            <h1 className="text-3xl font-bold text-gray-900 mb-2">Traffic Violation Analysis</h1>
-            <p className="text-gray-600">Upload traffic images for AI-powered violation detection using Gemini Vision</p>
+            <h1 className="text-3xl font-bold text-gray-900 mb-2">Traffic Violation Analysis - Enhanced AI</h1>
+            <p className="text-gray-600">Upload traffic images for complete 6-step AI analysis with enhanced quality assessment and license plate extraction</p>
             
             {/* Backend Status Indicator */}
             <div className="mt-4 flex items-center justify-center space-x-2">
@@ -361,7 +311,7 @@ const ImageIntake: React.FC = () => {
                 backendStatus === 'offline' ? 'bg-red-500' : 'bg-yellow-500'
               }`}></div>
               <span className="text-sm text-gray-500">
-                Backend: {backendStatus === 'online' ? 'Online' : backendStatus === 'offline' ? 'Offline' : 'Checking...'}
+                Backend: {backendStatus === 'online' ? 'Online (Enhanced AI Ready)' : backendStatus === 'offline' ? 'Offline' : 'Checking...'}
               </span>
             </div>
           </div>
@@ -394,7 +344,7 @@ const ImageIntake: React.FC = () => {
                 <div className="ml-3">
                   <h3 className="text-sm font-medium text-red-800">Backend Service Unavailable</h3>
                   <p className="mt-1 text-sm text-red-700">
-                    Cannot connect to the analysis backend. Please check your internet connection or try again later.
+                    Cannot connect to the enhanced AI analysis backend. Please check your internet connection or try again later.
                   </p>
                 </div>
               </div>
@@ -418,7 +368,7 @@ const ImageIntake: React.FC = () => {
               Drop traffic images here or click to browse
             </h3>
             <p className="text-gray-500 mb-4">
-              Supports JPG, PNG files. Each image will be analyzed for traffic violations.
+              Supports JPG, PNG files. Each image will be analyzed through our enhanced 6-step AI workflow with combined quality assessment and license plate extraction.
             </p>
             <input
               type="file"
@@ -463,7 +413,7 @@ const ImageIntake: React.FC = () => {
                         />
                       </div>
                       
-                      {/* Enhanced Analysis Workflow */}
+                      {/* Enhanced 6-Step Workflow Display */}
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center justify-between mb-4">
                           <h4 className="text-sm font-medium text-gray-900 truncate">
@@ -480,70 +430,131 @@ const ImageIntake: React.FC = () => {
                           </div>
                         </div>
 
-                        {/* Three-Step Workflow Display */}
+                        {/* Six-Step Workflow Display */}
                         <div className="space-y-3">
-                          {/* Step 1: Gemini AI Analysis */}
+                          {/* Step 1: Combined Quality Assessment + OCR */}
                           <div className="flex items-center space-x-3">
-                            {getStepIcon(image.geminiStatus)}
+                            {getStepIcon(image.step1Status)}
                             <div className="flex-1">
                               <div className="text-sm font-medium text-gray-900">
-                                1. AI Vehicle Analysis
-                                {image.geminiStatus === 'completed' && image.detectedPlateNumber && (
-                                  <span className="ml-2 text-blue-600">→ Plate: {image.detectedPlateNumber}</span>
+                                1. Quality Assessment + License Plate Extraction
+                                {image.step1Status === 'completed' && image.qualityCategory && (
+                                  <span className={`ml-2 text-xs px-2 py-1 rounded ${
+                                    image.qualityCategory === 'GOOD' ? 'bg-green-100 text-green-600' :
+                                    image.qualityCategory === 'NEEDS_BETTER_REVIEW' ? 'bg-yellow-100 text-yellow-600' :
+                                    'bg-red-100 text-red-600'
+                                  }`}>
+                                    {image.qualityCategory.replace('_', ' ')}
+                                  </span>
+                                )}
+                                {image.step1Status === 'completed' && image.detectedPlateNumber && (
+                                  <span className="ml-2 text-blue-600 font-mono">→ {image.detectedPlateNumber}</span>
                                 )}
                               </div>
-                              {image.geminiStatus === 'completed' && image.geminiData && (
-                                <div className="text-xs text-gray-500 mt-1">
-                                  {image.geminiData.violations?.length || 0} violations detected, 
-                                  Vehicle: {image.geminiData.vehicle_details?.make} {image.geminiData.vehicle_details?.model}
-                                </div>
-                              )}
                             </div>
                           </div>
 
-                          {/* Step 2: RTA Database Lookup */}
+                          {/* Step 2: OCR Data Processing */}
                           <div className="flex items-center space-x-3">
-                            {getStepIcon(image.rtaStatus)}
+                            {getStepIcon(image.step2Status)}
                             <div className="flex-1">
                               <div className="text-sm font-medium text-gray-900">
-                                2. RTA Database Verification
-                                {image.rtaStatus === 'skipped' && (
+                                2. License Plate Data Processing
+                                {image.step2Status === 'completed' && (
+                                  <span className="ml-2 text-green-600">→ Format validated & processed</span>
+                                )}
+                                {image.step2Status === 'skipped' && (
+                                  <span className="ml-2 text-yellow-600">→ Using Step 1 results</span>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+
+                          {/* Step 3: RTA Database Lookup */}
+                          <div className="flex items-center space-x-3">
+                            {getStepIcon(image.step3Status)}
+                            <div className="flex-1">
+                              <div className="text-sm font-medium text-gray-900">
+                                3. RTA Database Verification
+                                {image.step3Status === 'completed' && image.rtaData && (
+                                  <span className="ml-2 text-green-600">→ {image.rtaData.make} {image.rtaData.model}</span>
+                                )}
+                                {image.step3Status === 'skipped' && (
                                   <span className="ml-2 text-yellow-600">→ No plate detected</span>
                                 )}
-                                {image.rtaStatus === 'completed' && image.rtaData && (
-                                  <span className="ml-2 text-green-600">→ Vehicle found</span>
-                                )}
                               </div>
-                              {image.rtaStatus === 'completed' && image.rtaData && (
-                                <div className="text-xs text-gray-500 mt-1">
-                                  Owner: {image.rtaData.ownerName}, Make: {image.rtaData.make} {image.rtaData.model}
-                                </div>
-                              )}
                             </div>
                           </div>
 
-                          {/* Step 3: Comparison & Verification */}
+                          {/* Step 4: Vehicle Analysis */}
                           <div className="flex items-center space-x-3">
-                            {getStepIcon(image.comparisonStatus)}
+                            {getStepIcon(image.step4Status)}
                             <div className="flex-1">
                               <div className="text-sm font-medium text-gray-900">
-                                3. AI vs RTA Comparison
-                                {image.comparisonStatus === 'completed' && image.comparisonResult && (
-                                  <span className={`ml-2 ${image.comparisonResult.matches ? 'text-green-600' : 'text-red-600'}`}>
-                                    → {image.comparisonResult.matches ? 'Verified' : 'Mismatch detected'}
+                                4. AI Vehicle Analysis
+                                {image.step4Status === 'completed' && image.vehicleAnalysis && (
+                                  <span className="ml-2 text-blue-600">
+                                    → {image.vehicleAnalysis.vehicle_type} ({image.vehicleAnalysis.color})
                                   </span>
                                 )}
                               </div>
-                              {image.comparisonStatus === 'completed' && image.comparisonResult && (
-                                <div className="text-xs text-gray-500 mt-1">
-                                  Match Score: {Math.round(image.comparisonResult.overall_score * 100)}%
-                                  {image.comparisonResult.comparison_details && (
-                                    <span className="ml-2">
-                                      Make: {image.comparisonResult.comparison_details.make.match ? '✓' : '✗'},
-                                      Model: {image.comparisonResult.comparison_details.model.match ? '✓' : '✗'},
-                                      Color: {image.comparisonResult.comparison_details.color.match ? '✓' : '✗'}
-                                    </span>
-                                  )}
+                            </div>
+                          </div>
+
+                          {/* Step 5: Vehicle Comparison */}
+                          <div className="flex items-center space-x-3">
+                            {getStepIcon(image.step5Status)}
+                            <div className="flex-1">
+                              <div className="text-sm font-medium text-gray-900">
+                                5. AI vs RTA Comparison
+                                {image.step5Status === 'completed' && image.comparisonResult && (
+                                  <span className={`ml-2 ${
+                                    image.comparisonResult.overall_verdict === 'MATCH' ? 'text-green-600' :
+                                    image.comparisonResult.overall_verdict === 'PARTIAL_MATCH' ? 'text-yellow-600' :
+                                    'text-red-600'
+                                  }`}>
+                                    → {image.comparisonResult.overall_verdict} ({Math.round(image.comparisonResult.confidence_score * 100)}%)
+                                  </span>
+                                )}
+                                {image.step5Status === 'skipped' && (
+                                  <span className="ml-2 text-yellow-600">→ Missing data</span>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+
+                          {/* Step 6: Violation Detection */}
+                          <div className="flex items-center space-x-3">
+                            {getStepIcon(image.step6Status)}
+                            <div className="flex-1">
+                              <div className="text-sm font-medium text-gray-900">
+                                6. AI Violation Detection
+                                {image.step6Status === 'completed' && image.violationAnalysis && (
+                                  <span className="ml-2">
+                                    {image.violationAnalysis.detected_violation_count > 0 ? (
+                                      <span className="text-red-600">
+                                        → {image.violationAnalysis.detected_violation_count} violation(s)
+                                      </span>
+                                    ) : (
+                                      <span className="text-green-600">→ No violations</span>
+                                    )}
+                                  </span>
+                                )}
+                              </div>
+                              {/* Violation Details */}
+                              {image.step6Status === 'completed' && image.violationAnalysis?.violations_detected && (
+                                <div className="mt-2 flex flex-wrap gap-2">
+                                  {image.violationAnalysis.violations_detected
+                                    .filter((v: any) => v.detected)
+                                    .map((violation: any, index: number) => (
+                                      <span
+                                        key={index}
+                                        className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${getViolationBadge(violation.violation_type)}`}
+                                      >
+                                        <ShieldAlert className="w-3 h-3 mr-1" />
+                                        {violation.violation_type} ({Math.round(violation.confidence * 100)}%)
+                                      </span>
+                                    ))}
                                 </div>
                               )}
                             </div>
@@ -566,7 +577,8 @@ const ImageIntake: React.FC = () => {
                 <div className="flex items-center">
                   <Eye className="h-5 w-5 text-blue-500 mr-2" />
                   <span className="text-sm text-blue-700">
-                    <strong>Enhanced Analysis Pipeline:</strong> Each image goes through AI analysis → RTA verification → comparison validation before moving to officer review.
+                    <strong>Enhanced Step 6 AI Pipeline:</strong> Each image goes through complete analysis: 
+                    Enhanced Quality + License Plate Extraction → Data Processing → RTA Verification → Vehicle Analysis → AI Comparison → Violation Detection (No Helmet, Cell Phone Driving, Triple Riding)
                   </span>
                 </div>
               </div>
