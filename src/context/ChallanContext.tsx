@@ -175,11 +175,9 @@ export const ChallanProvider: React.FC<ChallanProviderProps> = ({ children }) =>
         const violations = violationAnalysis?.violation_types_found || [];
         const detectedViolationCount = violationAnalysis?.detected_violation_count || 0;
 
-        // Determine status based on violations and comparison results
-        let newStatus: Challan['status'] = 'approved';
-        if (detectedViolationCount > 0) {
-          newStatus = 'pending-review';
-        }
+        // ALL successfully analyzed images go to pending-review
+        // No auto-approval - everything requires manual review
+        const newStatus: Challan['status'] = 'pending-review';
 
         // Extract vehicle comparison from Step 5
         const vehicleComparison = step5Data?.comparison_result;
@@ -249,11 +247,9 @@ export const ChallanProvider: React.FC<ChallanProviderProps> = ({ children }) =>
         const violations = summary.violation_types || [];
         const detectedViolationCount = summary.violations_found || 0;
 
-        // Determine status based on violations and comparison results
-        let newStatus: Challan['status'] = 'approved';
-        if (detectedViolationCount > 0) {
-          newStatus = 'pending-review';
-        }
+        // ALL successfully analyzed images go to pending-review
+        // No auto-approval - everything requires manual review
+        const newStatus: Challan['status'] = 'pending-review';
 
         // Create vehicle matches from Step 5 comparison data
         const vehicleMatches = summary.comparison_result ? 
@@ -311,7 +307,9 @@ export const ChallanProvider: React.FC<ChallanProviderProps> = ({ children }) =>
         
         return {
           ...challan,
-          status: violations.length > 0 ? 'pending-review' : 'approved' as Challan['status'],
+          // ALL successfully analyzed images go to pending-review
+          // No auto-approval - everything requires manual review
+          status: 'pending-review' as Challan['status'],
           geminiAnalysis: analysis,
           plateNumber: analysis.gemini_analysis?.vehicle_details?.number_plate?.text,
           violations,

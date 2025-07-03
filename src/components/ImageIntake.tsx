@@ -314,9 +314,9 @@ const ImageIntake: React.FC = () => {
       
       if (violationCount > 0) {
         const violationText = violationCount === 1 ? 'violation' : 'violations';
-        return `${violationCount} ${violationText} detected → Moving to review`;
+        return `${violationCount} ${violationText} detected → Moving to review queue`;
       } else {
-        return `No violations detected → Auto-approved`;
+        return `Analysis complete → Moving to review queue`;
       }
     }
     
@@ -335,8 +335,9 @@ const ImageIntake: React.FC = () => {
           return 'bg-red-100 text-red-800';
         }
         
+        // All successful analyses go to review queue
         const violationCount = image.violationCount || 0;
-        return violationCount > 0 ? 'bg-orange-100 text-orange-800' : 'bg-green-100 text-green-800';
+        return violationCount > 0 ? 'bg-orange-100 text-orange-800' : 'bg-blue-100 text-blue-800';
       case 'error':
         return 'bg-red-100 text-red-800';
       default:
