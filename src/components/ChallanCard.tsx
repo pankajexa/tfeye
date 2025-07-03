@@ -171,31 +171,44 @@ const ChallanCard: React.FC<ChallanCardProps> = ({
           </div>
         </div>
 
-        {/* Simplified Violation Detection Results */}
-        {challan.violationAnalysis && (
+        {/* Enhanced Violation Detection Results */}
+        {(challan.violationAnalysis || challan.violations.length > 0) && (
           <div className="space-y-3">
             <h4 className="text-sm font-medium text-gray-900 flex items-center">
               <ShieldAlert className="h-4 w-4 mr-2" />
-              AI Violation Detection
+              Violation Detection Results
             </h4>
             <div className="bg-gray-50 p-4 rounded-lg space-y-4">
+              {/* Debug info - remove in production */}
+              {true && (
+                <div className="text-xs text-gray-500 bg-white p-2 rounded border">
+                  <strong>Debug:</strong> violationAnalysis exists: {challan.violationAnalysis ? 'Yes' : 'No'}, 
+                  violations count: {challan.violations.length}
+                  {challan.violationAnalysis && (
+                    <>, total_violations: {challan.violationAnalysis.overall_assessment?.total_violations || 'N/A'}</>
+                  )}
+                </div>
+              )}
+
               {/* Overall Status */}
               <div className="flex items-center justify-between">
                 <span className="text-sm font-medium text-gray-600">Detection Status:</span>
                 <span className={`px-3 py-1 rounded-full text-sm font-medium ${
-                  challan.violationAnalysis.overall_assessment.total_violations > 0 
+                  (challan.violationAnalysis?.overall_assessment?.total_violations || challan.violations.length) > 0 
                     ? 'bg-red-100 text-red-800' 
                     : 'bg-green-100 text-green-800'
                 }`}>
-                  {challan.violationAnalysis.overall_assessment.total_violations > 0 
+                  {challan.violationAnalysis?.overall_assessment?.total_violations 
                     ? `${challan.violationAnalysis.overall_assessment.total_violations} Violation(s) Detected`
-                    : 'No Violations Detected'
+                    : challan.violations.length > 0 
+                      ? `${challan.violations.length} Violation(s) Detected`
+                      : 'No Violations Detected'
                   }
                 </span>
               </div>
 
               {/* Detected Violations */}
-              {challan.violationAnalysis.violations_detected.some(v => v.detected) && (
+              {challan.violationAnalysis?.violations_detected?.some(v => v.detected) ? (
                 <div>
                   <span className="text-sm font-medium text-gray-600">Violations Found:</span>
                   <div className="mt-2 flex flex-wrap gap-2">
@@ -212,19 +225,46 @@ const ChallanCard: React.FC<ChallanCardProps> = ({
                       ))}
                   </div>
                 </div>
-              )}
+              ) : challan.violations.length > 0 ? (
+                <div>
+                  <span className="text-sm font-medium text-gray-600">Violations Found:</span>
+                  <div className="mt-2 flex flex-wrap gap-2">
+                    {challan.violations.map((violation, index) => (
+                      <span
+                        key={index}
+                        className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-medium border ${getViolationBadge(violation)}`}
+                      >
+                        <ShieldAlert className="w-4 h-4 mr-1" />
+                        {violation}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              ) : null}
 
               {/* Enforcement Action */}
-              <div className="flex items-center justify-between">
-                <span className="text-sm font-medium text-gray-600">Recommended Action:</span>
-                <span className={`px-3 py-1 rounded-full text-sm font-medium ${
-                  challan.violationAnalysis.enforcement_recommendation.action === 'ISSUE_CHALLAN' ? 'bg-red-100 text-red-800' :
-                  challan.violationAnalysis.enforcement_recommendation.action === 'REVIEW_REQUIRED' ? 'bg-orange-100 text-orange-800' :
-                  'bg-green-100 text-green-800'
-                }`}>
-                  {challan.violationAnalysis.enforcement_recommendation.action.replace('_', ' ')}
-                </span>
-              </div>
+              {challan.violationAnalysis?.enforcement_recommendation && (
+                <div className="flex items-center justify-between">
+                  <span className="text-sm font-medium text-gray-600">Recommended Action:</span>
+                  <span className={`px-3 py-1 rounded-full text-sm font-medium ${
+                    challan.violationAnalysis.enforcement_recommendation.action === 'ISSUE_CHALLAN' ? 'bg-red-100 text-red-800' :
+                    challan.violationAnalysis.enforcement_recommendation.action === 'REVIEW_REQUIRED' ? 'bg-orange-100 text-orange-800' :
+                    'bg-green-100 text-green-800'
+                  }`}>
+                    {challan.violationAnalysis.enforcement_recommendation.action.replace('_', ' ')}
+                  </span>
+                </div>
+              )}
+
+              {/* Analysis Confidence */}
+              {challan.violationAnalysis?.overall_assessment?.analysis_confidence && (
+                <div className="flex items-center justify-between">
+                  <span className="text-sm font-medium text-gray-600">Analysis Confidence:</span>
+                  <span className="text-sm text-gray-900">
+                    {Math.round(challan.violationAnalysis.overall_assessment.analysis_confidence * 100)}%
+                  </span>
+                </div>
+              )}
             </div>
           </div>
         )}
