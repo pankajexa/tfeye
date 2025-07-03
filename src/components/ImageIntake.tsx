@@ -61,10 +61,10 @@ const ImageIntake: React.FC = () => {
       
       console.log('✅ Analysis completed:', stepAnalysisResponse);
 
-      // Check Step 1 quality assessment first
+      // Check Step 1 for various rejection conditions
       const step1Data = stepAnalysisResponse.results.step1?.data;
       
-      // If image quality is bad, immediately reject
+      // Handle different rejection scenarios
       if (step1Data?.response_type === 'bad_quality') {
         console.log('🚫 Image rejected due to poor quality');
         
@@ -79,10 +79,8 @@ const ImageIntake: React.FC = () => {
             : img
         ));
 
-        // Update challan status to rejected (poor quality)
         updateChallanStatus(imageFile.challanId, 'rejected');
         
-        // Auto-remove from local state after 5 seconds
         setTimeout(() => {
           setAnalyzedImages(prev => prev.filter(img => img.id !== imageFile.id));
         }, 5000);
@@ -90,9 +88,81 @@ const ImageIntake: React.FC = () => {
         return;
       }
 
-      // Extract simplified results for good quality images
+      if (step1Data?.response_type === 'not_traffic_related') {
+        console.log('🚫 Image rejected - not traffic related');
+        
+        setAnalyzedImages(prev => prev.map(img => 
+          img.id === imageFile.id 
+            ? { 
+                ...img, 
+                status: 'completed' as const,
+                stepAnalysisResponse,
+                error: 'Image is not traffic-related'
+              } as AnalyzedImage
+            : img
+        ));
+
+        updateChallanStatus(imageFile.challanId, 'rejected');
+        
+        setTimeout(() => {
+          setAnalyzedImages(prev => prev.filter(img => img.id !== imageFile.id));
+        }, 5000);
+        
+        return;
+      }
+
+      // Check for vehicle analysis failures
+      const step4Data = stepAnalysisResponse.results.step4?.data;
+      if (step4Data && !step4Data.vehicles_present) {
+        console.log('🚫 Image rejected - no vehicles detected');
+        
+        setAnalyzedImages(prev => prev.map(img => 
+          img.id === imageFile.id 
+            ? { 
+                ...img, 
+                status: 'completed' as const,
+                stepAnalysisResponse,
+                error: 'No vehicles detected in image'
+              } as AnalyzedImage
+            : img
+        ));
+
+        updateChallanStatus(imageFile.challanId, 'rejected');
+        
+        setTimeout(() => {
+          setAnalyzedImages(prev => prev.filter(img => img.id !== imageFile.id));
+        }, 5000);
+        
+        return;
+      }
+
+      // Check for license plate extraction failures
+      const step2Data = stepAnalysisResponse.results.step2?.data;
+      if (!step1Data?.extracted_license_plate && !step2Data?.license_plate) {
+        console.log('🚫 Image rejected - no license plate detected');
+        
+        setAnalyzedImages(prev => prev.map(img => 
+          img.id === imageFile.id 
+            ? { 
+                ...img, 
+                status: 'completed' as const,
+                stepAnalysisResponse,
+                error: 'No license plate detected'
+              } as AnalyzedImage
+            : img
+        ));
+
+        updateChallanStatus(imageFile.challanId, 'rejected');
+        
+        setTimeout(() => {
+          setAnalyzedImages(prev => prev.filter(img => img.id !== imageFile.id));
+        }, 5000);
+        
+        return;
+      }
+
+      // Extract simplified results for successfully analyzed images
       const results = stepAnalysisResponse.results;
-      const step2Data = results.step2?.data;
       const step6Data = results.step6?.data;
       const step5Data = results.step5?.data;
 
@@ -205,8 +275,8 @@ const ImageIntake: React.FC = () => {
       case 'analyzing':
         return <div className="animate-pulse"><Eye className="h-5 w-5 text-blue-500" /></div>;
       case 'completed':
-        // Check if image was rejected due to poor quality
-        if (image.error && image.error.includes('Image quality too poor')) {
+        // Check for rejection cases
+        if (image.error) {
           return <XCircle className="h-5 w-5 text-red-500" />;
         }
         return <CheckCircle className="h-5 w-5 text-green-500" />;
@@ -223,9 +293,21 @@ const ImageIntake: React.FC = () => {
     if (image.status === 'analyzing') return 'Analyzing image...';
     
     if (image.status === 'completed') {
-      // Check if image was rejected due to poor quality
-      if (image.error && image.error.includes('Image quality too poor')) {
-        return 'Rejected → Image quality too poor for analysis';
+      // Check for different rejection reasons
+      if (image.error) {
+        if (image.error.includes('Image quality too poor')) {
+          return 'Rejected → Image quality too poor for analysis';
+        }
+        if (image.error.includes('not traffic-related')) {
+          return 'Rejected → Not a traffic-related image';
+        }
+        if (image.error.includes('No vehicles detected')) {
+          return 'Rejected → No vehicles detected in image';
+        }
+        if (image.error.includes('No license plate detected')) {
+          return 'Rejected → No license plate detected';
+        }
+        return 'Rejected → ' + image.error;
       }
       
       const violationCount = image.violationCount || 0;
@@ -248,8 +330,8 @@ const ImageIntake: React.FC = () => {
       case 'analyzing':
         return 'bg-yellow-100 text-yellow-800';
       case 'completed':
-        // Check if image was rejected due to poor quality
-        if (image.error && image.error.includes('Image quality too poor')) {
+        // Check for rejection cases
+        if (image.error) {
           return 'bg-red-100 text-red-800';
         }
         
