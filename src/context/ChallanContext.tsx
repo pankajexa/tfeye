@@ -160,6 +160,9 @@ export const ChallanProvider: React.FC<ChallanProviderProps> = ({ children }) =>
   };
 
   const updateChallanWithStepAnalysis = (id: string, stepAnalysisResponse: StepAnalysisResponse) => {
+    console.log('🔍 DEBUG: updateChallanWithStepAnalysis called for challan', id);
+    console.log('🔍 DEBUG: Full stepAnalysisResponse:', stepAnalysisResponse);
+    
     setChallans(prev => prev.map(challan => {
       if (challan.id === id) {
         // Extract data from the new step analysis structure
@@ -170,10 +173,16 @@ export const ChallanProvider: React.FC<ChallanProviderProps> = ({ children }) =>
         const step5Data = stepAnalysisResponse.results.step5?.data;
         const step6Data = stepAnalysisResponse.results.step6?.data;
 
+        console.log('🔍 DEBUG: step6Data:', step6Data);
+
         // Extract violations from Step 6 data
         const violationAnalysis = step6Data?.violation_analysis;
         const violations = violationAnalysis?.violation_types_found || [];
         const detectedViolationCount = violationAnalysis?.detected_violation_count || 0;
+
+        console.log('🔍 DEBUG: violationAnalysis:', violationAnalysis);
+        console.log('🔍 DEBUG: violations extracted:', violations);
+        console.log('🔍 DEBUG: detectedViolationCount:', detectedViolationCount);
 
         // ALL successfully analyzed images go to pending-review
         // No auto-approval - everything requires manual review
@@ -195,7 +204,7 @@ export const ChallanProvider: React.FC<ChallanProviderProps> = ({ children }) =>
         // Extract license plate from Step 1 or Step 2
         const extractedPlate = step1Data?.extracted_license_plate || step2Data?.license_plate;
 
-        return {
+        const updatedChallan = {
           ...challan,
           status: newStatus,
           stepAnalysisResponse,
@@ -230,6 +239,12 @@ export const ChallanProvider: React.FC<ChallanProviderProps> = ({ children }) =>
             registrationNumber: extractedPlate || 'Unknown'
           } : undefined
         };
+
+        console.log('🔍 DEBUG: Updated challan object:', updatedChallan);
+        console.log('🔍 DEBUG: Updated challan violations:', updatedChallan.violations);
+        console.log('🔍 DEBUG: Updated challan violationAnalysis:', updatedChallan.violationAnalysis);
+
+        return updatedChallan;
       }
       return challan;
     }));

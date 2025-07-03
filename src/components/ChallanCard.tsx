@@ -171,6 +171,16 @@ const ChallanCard: React.FC<ChallanCardProps> = ({
           </div>
         </div>
 
+        {/* DEBUG: Always show this to check data */}
+        <div className="bg-yellow-50 border border-yellow-200 p-4 rounded-lg">
+          <strong>🐛 DEBUG - Always Visible:</strong><br/>
+          - Challan ID: {challan.id}<br/>
+          - Status: {challan.status}<br/>
+          - violationAnalysis: {challan.violationAnalysis ? '✅ EXISTS' : '❌ NULL'}<br/>
+          - violations array: {challan.violations.length > 0 ? `✅ HAS ${challan.violations.length} items: ${JSON.stringify(challan.violations)}` : '❌ EMPTY'}<br/>
+          - Display condition: {(challan.violationAnalysis || challan.violations.length > 0) ? '✅ SHOULD SHOW' : '❌ SHOULD HIDE'}
+        </div>
+
         {/* Enhanced Violation Detection Results */}
         {(challan.violationAnalysis || challan.violations.length > 0) && (
           <div className="space-y-3">
@@ -182,10 +192,22 @@ const ChallanCard: React.FC<ChallanCardProps> = ({
               {/* Debug info - remove in production */}
               {true && (
                 <div className="text-xs text-gray-500 bg-white p-2 rounded border">
-                  <strong>Debug:</strong> violationAnalysis exists: {challan.violationAnalysis ? 'Yes' : 'No'}, 
-                  violations count: {challan.violations.length}
+                  <strong>Debug:</strong><br/>
+                  - violationAnalysis exists: {challan.violationAnalysis ? 'Yes' : 'No'}<br/>
+                  - violations array count: {challan.violations.length}<br/>
+                  - violations array: {JSON.stringify(challan.violations)}<br/>
+                  - stepAnalysisResponse exists: {challan.stepAnalysisResponse ? 'Yes' : 'No'}<br/>
                   {challan.violationAnalysis && (
-                    <>, total_violations: {challan.violationAnalysis.overall_assessment?.total_violations || 'N/A'}</>
+                    <>
+                      - total_violations: {challan.violationAnalysis.overall_assessment?.total_violations || 'N/A'}<br/>
+                      - violations_detected: {JSON.stringify(challan.violationAnalysis.violations_detected || 'N/A')}<br/>
+                    </>
+                  )}
+                  {challan.stepAnalysisResponse?.results?.step6 && (
+                    <>
+                      - step6 exists: Yes<br/>
+                      - step6 data: {JSON.stringify(challan.stepAnalysisResponse.results.step6.data?.violation_analysis || 'N/A')}<br/>
+                    </>
                   )}
                 </div>
               )}
