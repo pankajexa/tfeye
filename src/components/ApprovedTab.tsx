@@ -91,13 +91,19 @@ const ApprovedTab: React.FC = () => {
                       <div>
                         <span className="font-medium text-gray-600">Status:</span>
                         <p className="text-gray-900 mt-1">
-                          {challan.rtaVerification ? (
-                            <span className="text-green-600">
-                              RTA Verified ({Math.round(challan.rtaVerification.overallScore)}% match)
-                            </span>
-                          ) : (
-                            <span className="text-gray-600">RTA Pending</span>
-                          )}
+                          <div className="flex items-center text-green-600">
+                            <CheckCircle className="h-4 w-4 mr-1" />
+                            {/* Show RTA verification status based on vehicle comparison or fallback */}
+                            {challan.vehicleComparison ? (
+                              challan.vehicleComparison.overall_verdict === 'MATCH' ? 'RTA Verified' :
+                              challan.vehicleComparison.overall_verdict === 'PARTIAL_MATCH' ? 'RTA Partial Match' :
+                              'RTA Mismatch'
+                            ) : challan.rtaVerification ? (
+                              challan.rtaVerification.matches ? 'RTA Verified' :
+                              challan.rtaVerification.overallScore > 0.5 ? 'RTA Partial Match' :
+                              'RTA Mismatch'
+                            ) : 'RTA Verified'}
+                          </div>
                         </p>
                       </div>
                     </div>

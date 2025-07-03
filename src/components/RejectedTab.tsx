@@ -136,15 +136,26 @@ const RejectedTab: React.FC<RejectedTabProps> = ({ activeSubTab }) => {
                       
                       <div>
                         <span className="font-medium text-gray-600">Rejection Reason:</span>
-                        <p className="text-red-600 mt-1 font-medium">{challan.rejectionReason || 'System error'}</p>
+                        <p className="text-red-600 mt-1 font-medium">{challan.rejectionReason || 'Not specified'}</p>
                       </div>
                       
                       <div>
                         <span className="font-medium text-gray-600">Rejected By:</span>
                         <p className="text-gray-900 mt-1">{challan.reviewedBy || 'System'}</p>
-                        {challan.rtaVerification && (
+                        {/* Show RTA status without percentage */}
+                        {(challan.vehicleComparison || challan.rtaVerification) && (
                           <p className="text-xs text-gray-500">
-                            RTA Match: {Math.round(challan.rtaVerification.overallScore)}%
+                            RTA Status: {
+                              challan.vehicleComparison ? (
+                                challan.vehicleComparison.overall_verdict === 'MATCH' ? 'Verified' :
+                                challan.vehicleComparison.overall_verdict === 'PARTIAL_MATCH' ? 'Partial Match' :
+                                'Mismatch'
+                              ) : challan.rtaVerification ? (
+                                challan.rtaVerification.matches ? 'Verified' :
+                                challan.rtaVerification.overallScore > 0.5 ? 'Partial Match' :
+                                'Mismatch'
+                              ) : 'Not Available'
+                            }
                           </p>
                         )}
                       </div>
