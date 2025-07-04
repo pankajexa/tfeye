@@ -74,7 +74,7 @@ const PendingReviewTab: React.FC = () => {
       <div className="flex items-center justify-between">
         <h2 className="text-lg font-medium text-gray-900">Pending Review</h2>
         <div className="flex items-center space-x-4">
-          <div className="text-sm text-gray-500">
+        <div className="text-sm text-gray-500">
             {currentIndex + 1} of {pendingChallans.length}
           </div>
           

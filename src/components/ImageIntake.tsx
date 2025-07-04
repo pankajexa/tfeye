@@ -1,5 +1,5 @@
-import React, { useState, useCallback } from 'react';
-import { Upload, CheckCircle, XCircle, Image as ImageIcon, AlertCircle, Eye, ArrowRight, ShieldAlert } from 'lucide-react';
+import React, { useState, useCallback, useEffect, useRef } from 'react';
+import { Upload, CheckCircle, XCircle, Image as ImageIcon, AlertCircle, Eye, ArrowRight, ShieldAlert, Clock, Play, Pause, RotateCcw } from 'lucide-react';
 import { apiService, StepAnalysisResponse } from '../services/api';
 import { useChallanContext } from '../context/ChallanContext';
 
@@ -8,10 +8,12 @@ interface AnalyzedImage {
   challanId: string;
   file: File;
   preview: string;
-  status: 'uploading' | 'analyzing' | 'completed' | 'error';
+  status: 'queued' | 'analyzing' | 'completed' | 'error' | 'retrying';
   stepAnalysisResponse?: StepAnalysisResponse;
   error?: string;
-  uploadProgress?: number;
+  retryCount?: number;
+  maxRetries?: number;
+  queuePosition?: number;
   // Simplified status tracking
   detectedPlateNumber?: string;
   violationCount?: number;
@@ -19,10 +21,28 @@ interface AnalyzedImage {
   vehicleMatch?: boolean;
 }
 
+interface QueueStats {
+  total: number;
+  completed: number;
+  failed: number;
+  pending: number;
+  currentImage?: string;
+  isProcessing: boolean;
+  isPaused: boolean;
+}
+
 const ImageIntake: React.FC = () => {
   const [analyzedImages, setAnalyzedImages] = useState<AnalyzedImage[]>([]);
   const [isDragOver, setIsDragOver] = useState(false);
   const [backendStatus, setBackendStatus] = useState<'checking' | 'online' | 'offline'>('checking');
+  const [queueStats, setQueueStats] = useState<QueueStats>({
+    total: 0,
+    completed: 0,
+    failed: 0,
+    pending: 0,
+    isProcessing: false,
+    isPaused: false
+  });
   
   const { addChallan, updateChallanWithStepAnalysis, updateChallanStatus, getChallansByStatus } = useChallanContext();
 
@@ -41,6 +61,166 @@ const ImageIntake: React.FC = () => {
       setBackendStatus('offline');
     }
   };
+
+  const processingRef = useRef(false);
+  const pausedRef = useRef(false);
+
+  // Update pause ref when state changes
+  useEffect(() => {
+    pausedRef.current = queueStats.isPaused;
+  }, [queueStats.isPaused]);
+
+  // Simple queue processing function
+  const processQueue = useCallback(() => {
+    if (processingRef.current) return;
+    
+    const processNextImage = async () => {
+      if (pausedRef.current || processingRef.current) return;
+      
+      processingRef.current = true;
+      setQueueStats(prev => ({ ...prev, isProcessing: true }));
+
+      // Get current images
+      setAnalyzedImages(currentImages => {
+        // Find next image to process
+        const nextImage = currentImages.find(img => 
+          img.status === 'queued' || 
+          (img.status === 'error' && (img.retryCount || 0) < (img.maxRetries || 3))
+        );
+        
+        if (!nextImage) {
+          // No more images to process
+          processingRef.current = false;
+          setQueueStats(prev => ({ ...prev, isProcessing: false, currentImage: undefined }));
+          return currentImages;
+        }
+        
+        // Update current image in stats
+        setQueueStats(prev => ({ ...prev, currentImage: nextImage.file.name }));
+        
+        // Process the image
+        analyzeImageWithRetry(nextImage)
+          .then(() => {
+            // Schedule next image processing
+            setTimeout(() => {
+              processingRef.current = false;
+              processNextImage();
+            }, 2000);
+          })
+          .catch(error => {
+            console.error('Queue processing error:', error);
+            processingRef.current = false;
+            processNextImage();
+          });
+        
+        return currentImages;
+      });
+    };
+
+    processNextImage();
+  }, []);
+
+  const analyzeImageWithRetry = async (imageFile: AnalyzedImage) => {
+    const currentRetryCount = imageFile.retryCount || 0;
+    const maxRetries = imageFile.maxRetries || 3;
+    
+    try {
+      // Update status to analyzing or retrying
+      setAnalyzedImages(prev => prev.map(img => 
+        img.id === imageFile.id 
+          ? { ...img, status: currentRetryCount > 0 ? 'retrying' : 'analyzing' }
+          : img
+      ));
+
+      // Execute analysis
+      await analyzeImage(imageFile);
+      
+    } catch (error) {
+      console.error(`Analysis failed for ${imageFile.file.name}:`, error);
+      
+      if (currentRetryCount < maxRetries) {
+        // Retry with exponential backoff
+        const retryDelay = Math.pow(2, currentRetryCount) * 1000; // 1s, 2s, 4s, 8s...
+        
+        console.log(`Retrying ${imageFile.file.name} in ${retryDelay}ms (attempt ${currentRetryCount + 1}/${maxRetries})`);
+        
+        setAnalyzedImages(prev => prev.map(img => 
+          img.id === imageFile.id 
+            ? { ...img, retryCount: currentRetryCount + 1, status: 'queued' }
+            : img
+        ));
+        
+        // Wait before retry
+        await new Promise(resolve => setTimeout(resolve, retryDelay));
+        
+      } else {
+        // Max retries reached
+        setAnalyzedImages(prev => prev.map(img => 
+          img.id === imageFile.id 
+            ? { 
+                ...img, 
+                status: 'error', 
+                error: error instanceof Error ? error.message : 'Analysis failed after retries'
+              }
+            : img
+        ));
+        
+        // Update stats
+        setQueueStats(prev => ({ 
+          ...prev, 
+          failed: prev.failed + 1,
+          pending: prev.pending - 1
+        }));
+        
+        // Update challan status to rejected
+        updateChallanStatus(imageFile.challanId, 'rejected');
+      }
+    }
+  };
+
+  const pauseQueue = () => {
+    setQueueStats(prev => ({ ...prev, isPaused: true }));
+  };
+
+  const resumeQueue = () => {
+    setQueueStats(prev => ({ ...prev, isPaused: false }));
+    processQueue();
+  };
+
+  const retryFailedImages = () => {
+    setAnalyzedImages(prev => prev.map(img => 
+      img.status === 'error' 
+        ? { ...img, status: 'queued', retryCount: 0, error: undefined }
+        : img
+    ));
+    
+    const failedCount = analyzedImages.filter(img => img.status === 'error').length;
+    setQueueStats(prev => ({ 
+      ...prev, 
+      failed: prev.failed - failedCount,
+      pending: prev.pending + failedCount
+    }));
+    
+    processQueue();
+  };
+
+  // Auto-process queue when new images are added or when processing is resumed
+  useEffect(() => {
+    const hasQueuedImages = analyzedImages.some(img => img.status === 'queued');
+    if (hasQueuedImages && !queueStats.isProcessing && !queueStats.isPaused) {
+      processQueue();
+    }
+  }, [analyzedImages, queueStats.isProcessing, queueStats.isPaused, processQueue]);
+
+  // Update queue positions when images change
+  useEffect(() => {
+    const queuedImages = analyzedImages.filter(img => img.status === 'queued');
+    setAnalyzedImages(prev => prev.map(img => 
+      img.status === 'queued' 
+        ? { ...img, queuePosition: queuedImages.findIndex(q => q.id === img.id) + 1 }
+        : img
+    ));
+  }, [analyzedImages]);
 
   const analyzeImage = async (imageFile: AnalyzedImage) => {
     try {
@@ -191,6 +371,13 @@ const ImageIntake: React.FC = () => {
       // Update the challan in context with complete analysis results
       updateChallanWithStepAnalysis(imageFile.challanId, stepAnalysisResponse);
 
+      // Update queue stats
+      setQueueStats(prev => ({ 
+        ...prev, 
+        completed: prev.completed + 1,
+        pending: prev.pending - 1
+      }));
+
       // Auto-remove from local state after 8 seconds (moved to review queue)
       setTimeout(() => {
         setAnalyzedImages(prev => prev.filter(img => img.id !== imageFile.id));
@@ -209,13 +396,13 @@ const ImageIntake: React.FC = () => {
           : img
       ));
 
-      // Update challan status to rejected (system error)
-      updateChallanStatus(imageFile.challanId, 'rejected');
+      // Throw error to be handled by retry logic
+      throw error;
     }
   };
 
   const processFiles = (files: File[]) => {
-    const newImages: AnalyzedImage[] = files.map(file => {
+    const newImages: AnalyzedImage[] = files.map((file, index) => {
       const challanId = addChallan(file); // Add to global context
       
       return {
@@ -223,16 +410,24 @@ const ImageIntake: React.FC = () => {
         challanId,
         file,
         preview: URL.createObjectURL(file),
-        status: 'uploading'
+        status: 'queued',
+        retryCount: 0,
+        maxRetries: 3,
+        queuePosition: index + 1
       };
     });
 
     setAnalyzedImages(prev => [...prev, ...newImages]);
 
-    // Start analysis for each image
-    newImages.forEach(imageFile => {
-      setTimeout(() => analyzeImage(imageFile), 500);
-    });
+    // Update queue stats
+    setQueueStats(prev => ({
+      ...prev,
+      total: prev.total + newImages.length,
+      pending: prev.pending + newImages.length
+    }));
+
+    // Start queue processing
+    processQueue();
   };
 
   const handleDrop = useCallback((e: React.DragEvent) => {
@@ -270,10 +465,12 @@ const ImageIntake: React.FC = () => {
 
   const getStatusIcon = (image: AnalyzedImage) => {
     switch (image.status) {
-      case 'uploading':
-        return <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-blue-600"></div>;
+      case 'queued':
+        return <Clock className="h-5 w-5 text-gray-500" />;
       case 'analyzing':
         return <div className="animate-pulse"><Eye className="h-5 w-5 text-blue-500" /></div>;
+      case 'retrying':
+        return <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-yellow-600"></div>;
       case 'completed':
         // Check for rejection cases
         if (image.error) {
@@ -288,9 +485,10 @@ const ImageIntake: React.FC = () => {
   };
 
   const getStatusText = (image: AnalyzedImage) => {
-    if (image.status === 'uploading') return 'Uploading...';
-    if (image.status === 'error') return 'Analysis failed';
+    if (image.status === 'queued') return `Queued (Position ${image.queuePosition || 1})`;
     if (image.status === 'analyzing') return 'Analyzing image...';
+    if (image.status === 'retrying') return `Retrying... (Attempt ${(image.retryCount || 0) + 1}/${image.maxRetries || 3})`;
+    if (image.status === 'error') return 'Analysis failed';
     
     if (image.status === 'completed') {
       // Check for different rejection reasons
@@ -325,10 +523,12 @@ const ImageIntake: React.FC = () => {
 
   const getStatusColor = (image: AnalyzedImage) => {
     switch (image.status) {
-      case 'uploading':
-        return 'bg-blue-100 text-blue-800';
+      case 'queued':
+        return 'bg-gray-100 text-gray-800';
       case 'analyzing':
         return 'bg-yellow-100 text-yellow-800';
+      case 'retrying':
+        return 'bg-orange-100 text-orange-800';
       case 'completed':
         // Check for rejection cases
         if (image.error) {
@@ -400,6 +600,78 @@ const ImageIntake: React.FC = () => {
               <div className="text-sm text-red-600">Rejected</div>
             </div>
           </div>
+
+          {/* Queue Status Display */}
+          {queueStats.total > 0 && (
+            <div className="mb-6 bg-blue-50 border border-blue-200 rounded-md p-4">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center">
+                  <div className="flex-shrink-0">
+                    {queueStats.isProcessing ? (
+                      <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600"></div>
+                    ) : queueStats.isPaused ? (
+                      <Pause className="h-6 w-6 text-orange-500" />
+                    ) : (
+                      <Play className="h-6 w-6 text-green-500" />
+                    )}
+                  </div>
+                  <div className="ml-3">
+                    <h3 className="text-sm font-medium text-blue-800">
+                      Processing Queue ({queueStats.completed}/{queueStats.total})
+                    </h3>
+                    <p className="mt-1 text-sm text-blue-700">
+                      {queueStats.currentImage ? `Currently processing: ${queueStats.currentImage}` : 
+                       queueStats.isPaused ? 'Queue paused' : 
+                       queueStats.isProcessing ? 'Processing...' : 'Queue ready'}
+                    </p>
+                  </div>
+                </div>
+                <div className="flex items-center space-x-2">
+                  {queueStats.isProcessing && !queueStats.isPaused ? (
+                    <button
+                      onClick={pauseQueue}
+                      className="inline-flex items-center px-3 py-1 border border-orange-300 text-sm font-medium rounded-md text-orange-700 bg-orange-50 hover:bg-orange-100"
+                    >
+                      <Pause className="h-4 w-4 mr-1" />
+                      Pause
+                    </button>
+                  ) : (
+                    <button
+                      onClick={resumeQueue}
+                      className="inline-flex items-center px-3 py-1 border border-green-300 text-sm font-medium rounded-md text-green-700 bg-green-50 hover:bg-green-100"
+                    >
+                      <Play className="h-4 w-4 mr-1" />
+                      Resume
+                    </button>
+                  )}
+                  
+                  {queueStats.failed > 0 && (
+                    <button
+                      onClick={retryFailedImages}
+                      className="inline-flex items-center px-3 py-1 border border-red-300 text-sm font-medium rounded-md text-red-700 bg-red-50 hover:bg-red-100"
+                    >
+                      <RotateCcw className="h-4 w-4 mr-1" />
+                      Retry Failed ({queueStats.failed})
+                    </button>
+                  )}
+                </div>
+              </div>
+              
+              {/* Progress Bar */}
+              <div className="mt-3">
+                <div className="flex justify-between text-sm text-blue-600 mb-1">
+                  <span>Progress</span>
+                  <span>{Math.round((queueStats.completed / queueStats.total) * 100)}%</span>
+                </div>
+                <div className="w-full bg-blue-200 rounded-full h-2">
+                  <div 
+                    className="bg-blue-600 h-2 rounded-full transition-all duration-300"
+                    style={{ width: `${Math.round((queueStats.completed / queueStats.total) * 100)}%` }}
+                  ></div>
+                </div>
+              </div>
+            </div>
+          )}
 
           {/* Backend Offline Warning */}
           {backendStatus === 'offline' && (
