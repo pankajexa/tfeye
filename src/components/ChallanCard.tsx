@@ -17,7 +17,7 @@ import {
   X,
   RotateCcw
 } from 'lucide-react';
-import { Challan } from '../context/ChallanContext';
+import { Challan, useChallanContext } from '../context/ChallanContext';
 import ImageZoom from './ImageZoom';
 import { apiService } from '../services/api';
 
@@ -52,6 +52,9 @@ const ChallanCard: React.FC<ChallanCardProps> = ({
     vehicleType: ''
   });
   const [isReAnalyzing, setIsReAnalyzing] = useState(false);
+  
+  // Access challan context for direct updates
+  const { updateChallanWithStepAnalysis } = useChallanContext();
 
   const rejectionReasons = [
     'Poor image quality',
@@ -117,32 +120,75 @@ const ChallanCard: React.FC<ChallanCardProps> = ({
           plateNumber: newValue.trim().toUpperCase()
         };
         
-        // Call onAction to trigger re-analysis
+        // Call onAction to trigger full re-analysis
         onAction('modify', 'License plate corrected - re-analyzing', updatedChallan);
         
       } else {
-        // For other fields, update the challan directly and re-run comparison
-        console.log(`Updating ${field} to:`, newValue);
+        // For vehicle details, run comparison API with updated data
+        console.log(`Re-comparing ${field} with new value:`, newValue);
         
-        // Update the vehicle details
-        const updatedVehicleDetails = challan.vehicleDetails ? {
-          ...challan.vehicleDetails,
-          [field.toLowerCase()]: newValue.trim()
-        } : {
-          make: field.toLowerCase() === 'make' ? newValue.trim() : 'Unknown',
-          model: field.toLowerCase() === 'model' ? newValue.trim() : 'Unknown',
-          color: field.toLowerCase() === 'color' ? newValue.trim() : 'Unknown',
-          vehicleType: field.toLowerCase() === 'vehicletype' ? newValue.trim() : 'Unknown',
-          confidence: { make: 0, model: 0, color: 0 }
+        if (!challan.rtaData) {
+          alert('Cannot re-analyze: No RTA data available for comparison');
+          return;
+        }
+
+        // Create updated AI analysis data with the corrected value
+        const currentVehicleAnalysis = challan.vehicleAnalysisData || challan.stepAnalysisResponse?.results?.step4?.data?.vehicle_analysis;
+        
+        if (!currentVehicleAnalysis) {
+          alert('Cannot re-analyze: No vehicle analysis data available');
+          return;
+        }
+
+        const updatedAiAnalysis = {
+          ...currentVehicleAnalysis,
+          [field.toLowerCase().replace(' ', '_')]: newValue.trim()
         };
+
+        console.log('Calling comparison API with:', {
+          aiAnalysis: updatedAiAnalysis,
+          rtaData: challan.rtaData
+        });
+
+        // Call the comparison API
+        const comparisonResult = await apiService.compareVehicleDetails(updatedAiAnalysis, challan.rtaData);
         
-        const updatedChallan = {
-          ...challan,
-          vehicleDetails: updatedVehicleDetails
-        };
-        
-        // Call onAction to trigger re-comparison
-        onAction('modify', `${field} corrected - re-analyzing`, updatedChallan);
+        if (comparisonResult.success && comparisonResult.data) {
+          console.log('✅ Comparison completed:', comparisonResult.data);
+          
+          // Update the challan with new comparison results
+          const updatedStepAnalysisResponse = {
+            ...challan.stepAnalysisResponse!,
+            results: {
+              ...challan.stepAnalysisResponse?.results,
+              step4: {
+                success: true,
+                step: 4,
+                step_name: 'AI Vehicle Analysis',
+                ...challan.stepAnalysisResponse?.results?.step4,
+                data: {
+                  ...challan.stepAnalysisResponse?.results?.step4?.data,
+                  vehicle_analysis: updatedAiAnalysis
+                }
+              },
+              step5: {
+                success: true,
+                step: 5,
+                step_name: 'Vehicle Details Comparison',
+                data: comparisonResult.data
+              }
+            }
+          };
+
+          // Update the challan context with new analysis
+          updateChallanWithStepAnalysis(challan.id, updatedStepAnalysisResponse);
+          
+          // Show success message
+          alert(`${field} updated successfully! Comparison results refreshed.`);
+          
+        } else {
+          throw new Error(comparisonResult.error || 'Comparison failed');
+        }
       }
       
       // Reset editing state
@@ -151,7 +197,7 @@ const ChallanCard: React.FC<ChallanCardProps> = ({
       
     } catch (error) {
       console.error('Failed to re-analyze:', error);
-      alert('Failed to re-analyze. Please try again.');
+      alert(`Failed to re-analyze: ${error instanceof Error ? error.message : 'Unknown error'}`);
     } finally {
       setIsReAnalyzing(false);
     }
