@@ -11,10 +11,15 @@ import {
   ChevronRight,
   AlertTriangle,
   ShieldAlert,
-  Eye
+  Eye,
+  Edit,
+  Save,
+  X,
+  RotateCcw
 } from 'lucide-react';
 import { Challan } from '../context/ChallanContext';
 import ImageZoom from './ImageZoom';
+import { apiService } from '../services/api';
 
 interface ChallanCardProps {
   challan: Challan;
@@ -35,6 +40,18 @@ const ChallanCard: React.FC<ChallanCardProps> = ({
 }) => {
   const [showRejectOptions, setShowRejectOptions] = useState(false);
   const [rejectionReason, setRejectionReason] = useState('');
+  
+  // Edit functionality state
+  const [isEditing, setIsEditing] = useState(false);
+  const [editingField, setEditingField] = useState<string | null>(null);
+  const [editedValues, setEditedValues] = useState({
+    plateNumber: challan.plateNumber || '',
+    make: '',
+    model: '',
+    color: '',
+    vehicleType: ''
+  });
+  const [isReAnalyzing, setIsReAnalyzing] = useState(false);
 
   const rejectionReasons = [
     'Poor image quality',
@@ -52,6 +69,91 @@ const ChallanCard: React.FC<ChallanCardProps> = ({
       onAction('reject', rejectionReason);
       setShowRejectOptions(false);
       setRejectionReason('');
+    }
+  };
+
+  // Edit functionality handlers
+  const startEditing = (field: string, currentValue: string) => {
+    setEditingField(field);
+    const fieldKey = field.toLowerCase().replace(' ', '').replace('type', 'Type');
+    setEditedValues(prev => ({
+      ...prev,
+      [fieldKey]: currentValue
+    }));
+    setIsEditing(true);
+  };
+
+  const cancelEditing = () => {
+    setEditingField(null);
+    setIsEditing(false);
+    setEditedValues({
+      plateNumber: challan.plateNumber || '',
+      make: '',
+      model: '',
+      color: '',
+      vehicleType: ''
+    });
+  };
+
+  const saveEdit = async (field: string) => {
+    const fieldKey = field.toLowerCase().replace(' ', '').replace('type', 'Type');
+    const newValue = editedValues[fieldKey as keyof typeof editedValues];
+    
+    if (!newValue || newValue.trim() === '') {
+      alert('Please enter a valid value');
+      return;
+    }
+
+    setIsReAnalyzing(true);
+    
+    try {
+      // If editing license plate, re-run the entire analysis
+      if (field === 'License Plate') {
+        console.log('Re-analyzing with corrected license plate:', newValue);
+        
+        // Create updated challan with new plate number
+        const updatedChallan = {
+          ...challan,
+          plateNumber: newValue.trim().toUpperCase()
+        };
+        
+        // Call onAction to trigger re-analysis
+        onAction('modify', 'License plate corrected - re-analyzing', updatedChallan);
+        
+      } else {
+        // For other fields, update the challan directly and re-run comparison
+        console.log(`Updating ${field} to:`, newValue);
+        
+        // Update the vehicle details
+        const updatedVehicleDetails = challan.vehicleDetails ? {
+          ...challan.vehicleDetails,
+          [field.toLowerCase()]: newValue.trim()
+        } : {
+          make: field.toLowerCase() === 'make' ? newValue.trim() : 'Unknown',
+          model: field.toLowerCase() === 'model' ? newValue.trim() : 'Unknown',
+          color: field.toLowerCase() === 'color' ? newValue.trim() : 'Unknown',
+          vehicleType: field.toLowerCase() === 'vehicletype' ? newValue.trim() : 'Unknown',
+          confidence: { make: 0, model: 0, color: 0 }
+        };
+        
+        const updatedChallan = {
+          ...challan,
+          vehicleDetails: updatedVehicleDetails
+        };
+        
+        // Call onAction to trigger re-comparison
+        onAction('modify', `${field} corrected - re-analyzing`, updatedChallan);
+      }
+      
+      // Reset editing state
+      setEditingField(null);
+      setIsEditing(false);
+      
+    } catch (error) {
+      console.error('Failed to re-analyze:', error);
+      alert('Failed to re-analyze. Please try again.');
+    } finally {
+      setIsReAnalyzing(false);
     }
   };
 
@@ -93,23 +195,26 @@ const ChallanCard: React.FC<ChallanCardProps> = ({
       return challan.vehicleMatches;
     }
 
-    // Final fallback: Show pending status
+    // Final fallback: Show RTA data status
+    const hasRTAData = challan.rtaData || (challan.stepAnalysisResponse?.results?.step3?.success);
+    const rtaDataStatus = hasRTAData ? 'Analysis Pending' : 'RTA Data Not Found';
+    
     return [
       {
         field: 'Make',
-        rtaData: 'Analysis Pending',
+        rtaData: rtaDataStatus,
         aiDetected: challan.vehicleDetails?.make || 'Not Analyzed',
         match: false
       },
       {
         field: 'Model', 
-        rtaData: 'Analysis Pending',
+        rtaData: rtaDataStatus,
         aiDetected: challan.vehicleDetails?.model || 'Not Analyzed',
         match: false
       },
       {
         field: 'Color',
-        rtaData: 'Analysis Pending',
+        rtaData: rtaDataStatus,
         aiDetected: challan.vehicleDetails?.color || 'Not Analyzed',
         match: false
       }
@@ -346,7 +451,7 @@ const ChallanCard: React.FC<ChallanCardProps> = ({
               </div>
             </div>
 
-            {/* Simplified License Plate Display */}
+            {/* Editable License Plate Display */}
             {challan.plateNumber && (
               <div className="space-y-3">
                 <h4 className="text-sm font-medium text-gray-900 flex items-center">
@@ -354,19 +459,62 @@ const ChallanCard: React.FC<ChallanCardProps> = ({
                   License Plate
                 </h4>
                 <div className="bg-gray-50 p-3 rounded-lg">
-                  <span className="text-blue-600 font-mono font-medium text-lg">{challan.plateNumber}</span>
+                  {editingField === 'License Plate' ? (
+                    <div className="flex items-center space-x-2">
+                      <input
+                        type="text"
+                        value={editedValues.plateNumber}
+                        onChange={(e) => setEditedValues(prev => ({ ...prev, plateNumber: e.target.value.toUpperCase() }))}
+                        className="flex-1 px-3 py-2 border border-gray-300 rounded-md text-sm font-mono focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        placeholder="Enter license plate"
+                        autoFocus
+                      />
+                      <button
+                        onClick={() => saveEdit('License Plate')}
+                        disabled={isReAnalyzing}
+                        className="inline-flex items-center p-2 border border-green-300 rounded-md text-green-700 bg-green-50 hover:bg-green-100 disabled:opacity-50"
+                      >
+                        <Save className="h-4 w-4" />
+                      </button>
+                      <button
+                        onClick={cancelEditing}
+                        className="inline-flex items-center p-2 border border-gray-300 rounded-md text-gray-700 bg-white hover:bg-gray-50"
+                      >
+                        <X className="h-4 w-4" />
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="flex items-center justify-between">
+                      <span className="text-blue-600 font-mono font-medium text-lg">{challan.plateNumber}</span>
+                      <button
+                        onClick={() => startEditing('License Plate', challan.plateNumber || '')}
+                        disabled={isReAnalyzing}
+                        className="inline-flex items-center p-1 text-gray-400 hover:text-blue-600 disabled:opacity-50"
+                        title="Edit license plate"
+                      >
+                        <Edit className="h-4 w-4" />
+                      </button>
+                    </div>
+                  )}
+                  {isReAnalyzing && (
+                    <div className="mt-2 flex items-center text-sm text-blue-600">
+                      <RotateCcw className="h-4 w-4 mr-1 animate-spin" />
+                      Re-analyzing with updated data...
+                    </div>
+                  )}
                 </div>
               </div>
             )}
           </div>
         </div>
 
-        {/* Simplified Vehicle & RTA Matching */}
+        {/* Editable Vehicle & RTA Matching */}
         <div className="space-y-3">
           <div className="flex items-center justify-between">
             <h4 className="text-sm font-medium text-gray-900 flex items-center">
               <Car className="h-4 w-4 mr-2" />
               Vehicle & RTA Data
+              <span className="ml-2 text-xs text-gray-500">(Click <Edit className="inline h-3 w-3" /> to edit detected values)</span>
             </h4>
             {challan.vehicleComparison && (
               <div className="flex items-center space-x-2">
@@ -381,6 +529,19 @@ const ChallanCard: React.FC<ChallanCardProps> = ({
               </div>
             )}
           </div>
+          
+          {/* Edit functionality info */}
+          {!isEditing && !isReAnalyzing && (
+            <div className="bg-blue-50 border border-blue-200 rounded-md p-3">
+              <div className="flex items-center">
+                <Edit className="h-4 w-4 text-blue-500 mr-2" />
+                <p className="text-sm text-blue-700">
+                  You can edit license plate and vehicle details to correct AI detection mistakes. 
+                  Changes will trigger re-analysis for accurate results.
+                </p>
+              </div>
+            </div>
+          )}
           
           <div className="bg-gray-50 rounded-lg overflow-hidden">
             <table className="min-w-full">
@@ -398,6 +559,9 @@ const ChallanCard: React.FC<ChallanCardProps> = ({
                   <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                     Status
                   </th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Actions
+                  </th>
                 </tr>
               </thead>
               <tbody className="bg-white divide-y divide-gray-200">
@@ -410,13 +574,59 @@ const ChallanCard: React.FC<ChallanCardProps> = ({
                       {match.rtaData}
                     </td>
                     <td className="px-4 py-3 text-sm text-gray-900">
-                      {match.aiDetected}
+                      {editingField === match.field ? (
+                        <div className="flex items-center space-x-2">
+                          <input
+                            type="text"
+                            value={editedValues[match.field.toLowerCase().replace(' ', '').replace('type', 'Type') as keyof typeof editedValues]}
+                            onChange={(e) => setEditedValues(prev => ({ 
+                              ...prev, 
+                              [match.field.toLowerCase().replace(' ', '').replace('type', 'Type')]: e.target.value 
+                            }))}
+                            className="flex-1 px-2 py-1 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                            placeholder={`Enter ${match.field.toLowerCase()}`}
+                            autoFocus
+                          />
+                        </div>
+                      ) : (
+                        match.aiDetected
+                      )}
                     </td>
                     <td className="px-4 py-3 text-sm">
                       {match.match ? (
                         <CheckCircle className="h-5 w-5 text-green-500" />
                       ) : (
                         <XCircle className="h-5 w-5 text-red-500" />
+                      )}
+                    </td>
+                    <td className="px-4 py-3 text-sm">
+                      {editingField === match.field ? (
+                        <div className="flex items-center space-x-1">
+                          <button
+                            onClick={() => saveEdit(match.field)}
+                            disabled={isReAnalyzing}
+                            className="inline-flex items-center p-1 border border-green-300 rounded text-green-700 bg-green-50 hover:bg-green-100 disabled:opacity-50"
+                            title="Save changes"
+                          >
+                            <Save className="h-3 w-3" />
+                          </button>
+                          <button
+                            onClick={cancelEditing}
+                            className="inline-flex items-center p-1 border border-gray-300 rounded text-gray-700 bg-white hover:bg-gray-50"
+                            title="Cancel"
+                          >
+                            <X className="h-3 w-3" />
+                          </button>
+                        </div>
+                      ) : (
+                        <button
+                          onClick={() => startEditing(match.field, match.aiDetected)}
+                          disabled={isReAnalyzing || match.aiDetected === 'Not Detected' || match.aiDetected === 'Not Analyzed' || match.rtaData === 'RTA Data Not Found'}
+                          className="inline-flex items-center p-1 text-gray-400 hover:text-blue-600 disabled:opacity-50 disabled:cursor-not-allowed"
+                          title={match.aiDetected === 'Not Detected' ? 'No data to edit' : 'Edit detected value'}
+                        >
+                          <Edit className="h-3 w-3" />
+                        </button>
                       )}
                     </td>
                   </tr>
@@ -462,7 +672,7 @@ const ChallanCard: React.FC<ChallanCardProps> = ({
             <div className="text-center">
               <span className="inline-flex items-center px-4 py-2 rounded-md text-sm font-medium bg-gray-100 text-gray-600">
                 <AlertTriangle className="h-4 w-4 mr-2" />
-                Verification Pending
+                {challan.rtaData || (challan.stepAnalysisResponse?.results?.step3?.success) ? 'Verification Pending' : 'RTA Data Not Found'}
               </span>
             </div>
           )}
