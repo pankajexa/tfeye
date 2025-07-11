@@ -28,6 +28,7 @@ interface ChallanCardProps {
   onAction: (action: 'approve' | 'reject' | 'modify', reason?: string, updatedChallan?: Challan) => void;
   canGoNext: boolean;
   canGoPrevious: boolean;
+  isParentReAnalyzing?: boolean;
 }
 
 const ChallanCard: React.FC<ChallanCardProps> = ({
@@ -36,7 +37,8 @@ const ChallanCard: React.FC<ChallanCardProps> = ({
   onPrevious,
   onAction,
   canGoNext,
-  canGoPrevious
+  canGoPrevious,
+  isParentReAnalyzing = false
 }) => {
   const [showRejectOptions, setShowRejectOptions] = useState(false);
   const [rejectionReason, setRejectionReason] = useState('');
@@ -517,7 +519,7 @@ const ChallanCard: React.FC<ChallanCardProps> = ({
                       />
                       <button
                         onClick={() => saveEdit('License Plate')}
-                        disabled={isReAnalyzing}
+                        disabled={isReAnalyzing || isParentReAnalyzing}
                         className="inline-flex items-center p-2 border border-green-300 rounded-md text-green-700 bg-green-50 hover:bg-green-100 disabled:opacity-50"
                       >
                         <Save className="h-4 w-4" />
@@ -534,7 +536,7 @@ const ChallanCard: React.FC<ChallanCardProps> = ({
                       <span className="text-blue-600 font-mono font-medium text-lg">{challan.plateNumber}</span>
                       <button
                         onClick={() => startEditing('License Plate', challan.plateNumber || '')}
-                        disabled={isReAnalyzing}
+                        disabled={isReAnalyzing || isParentReAnalyzing}
                         className="inline-flex items-center p-1 text-gray-400 hover:text-blue-600 disabled:opacity-50"
                         title="Edit license plate"
                       >
@@ -542,10 +544,10 @@ const ChallanCard: React.FC<ChallanCardProps> = ({
                       </button>
                     </div>
                   )}
-                  {isReAnalyzing && (
+                  {(isReAnalyzing || isParentReAnalyzing) && (
                     <div className="mt-2 flex items-center text-sm text-blue-600">
                       <RotateCcw className="h-4 w-4 mr-1 animate-spin" />
-                      Re-analyzing with updated data...
+                      {isParentReAnalyzing ? 'Re-analyzing with corrected license plate...' : 'Re-analyzing with updated data...'}
                     </div>
                   )}
                 </div>
@@ -577,7 +579,7 @@ const ChallanCard: React.FC<ChallanCardProps> = ({
           </div>
           
           {/* Edit functionality info */}
-          {!isEditing && !isReAnalyzing && (
+          {!isEditing && !isReAnalyzing && !isParentReAnalyzing && (
             <div className="bg-blue-50 border border-blue-200 rounded-md p-3">
               <div className="flex items-center">
                 <Edit className="h-4 w-4 text-blue-500 mr-2" />
@@ -650,7 +652,7 @@ const ChallanCard: React.FC<ChallanCardProps> = ({
                         <div className="flex items-center space-x-1">
                           <button
                             onClick={() => saveEdit(match.field)}
-                            disabled={isReAnalyzing}
+                            disabled={isReAnalyzing || isParentReAnalyzing}
                             className="inline-flex items-center p-1 border border-green-300 rounded text-green-700 bg-green-50 hover:bg-green-100 disabled:opacity-50"
                             title="Save changes"
                           >
@@ -667,7 +669,7 @@ const ChallanCard: React.FC<ChallanCardProps> = ({
                       ) : (
                         <button
                           onClick={() => startEditing(match.field, match.aiDetected)}
-                          disabled={isReAnalyzing || match.aiDetected === 'Not Detected' || match.aiDetected === 'Not Analyzed' || match.rtaData === 'RTA Data Not Found'}
+                          disabled={isReAnalyzing || isParentReAnalyzing || match.aiDetected === 'Not Detected' || match.aiDetected === 'Not Analyzed' || match.rtaData === 'RTA Data Not Found'}
                           className="inline-flex items-center p-1 text-gray-400 hover:text-blue-600 disabled:opacity-50 disabled:cursor-not-allowed"
                           title={match.aiDetected === 'Not Detected' ? 'No data to edit' : 'Edit detected value'}
                         >

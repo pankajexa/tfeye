@@ -430,6 +430,72 @@ class ApiService {
     return response.json();
   }
 
+  async reAnalyzeWithCorrectedPlate(imageFile: File, correctedPlateNumber: string): Promise<StepAnalysisResponse> {
+    console.log('🔄 Re-analyzing with corrected license plate:', correctedPlateNumber);
+
+    try {
+      // Step 3: RTA Lookup with corrected plate
+      const rtaResult = await this.fetchRTADetails(correctedPlateNumber);
+      
+      // Step 4: Re-run vehicle analysis
+      const vehicleResult = await this.analyzeVehicleDetails(imageFile);
+      
+      // Step 5: Re-run comparison with corrected plate RTA data (only if both are available)
+      let comparisonResult: StepResponse | undefined = undefined;
+      if (vehicleResult.success && rtaResult.success) {
+        comparisonResult = await this.compareVehicleDetails(
+          vehicleResult.data.vehicle_analysis,
+          rtaResult.data.rta_data
+        );
+      }
+
+      // Step 6: Re-run violation detection
+      const violationResult = await this.detectViolations(imageFile);
+
+      // Construct the updated step analysis response
+      const stepAnalysisResponse: StepAnalysisResponse = {
+        success: true,
+        step: 6,
+        step_name: 'Re-analysis with Corrected License Plate',
+        timestamp: new Date().toISOString(),
+        results: {
+          step1: {
+            success: true,
+            step: 1,
+            step_name: 'Manual License Plate Correction',
+            data: {
+              quality_category: 'MANUAL_CORRECTION',
+              extracted_license_plate: correctedPlateNumber,
+              license_plate_extractable: true,
+              manually_corrected: true
+            }
+          },
+          step2: {
+            success: true,
+            step: 2,
+            step_name: 'License Plate OCR',
+            data: {
+              license_plate: correctedPlateNumber,
+              extraction_method: 'Manual Correction'
+            }
+          },
+          step3: rtaResult,
+          step4: vehicleResult,
+          step5: comparisonResult,
+          step6: violationResult
+        },
+        recommendation: 'Re-analysis completed with corrected license plate',
+        next_steps: ['review_results']
+      };
+
+      return stepAnalysisResponse;
+
+    } catch (error) {
+      console.error('Failed to re-analyze with corrected plate:', error);
+      throw new Error(`Re-analysis failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
+
   async detectViolations(imageFile: File, qualityCategory?: string, vehicleAnalysis?: any): Promise<StepResponse> {
     const formData = new FormData();
     formData.append('image', imageFile);

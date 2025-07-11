@@ -1,12 +1,14 @@
 import React, { useState } from 'react';
 import { ClipboardList, Eye, CheckCircle, XCircle, ChevronLeft, ChevronRight } from 'lucide-react';
 import { useChallanContext } from '../context/ChallanContext';
+import { apiService } from '../services/api';
 import ChallanCard from './ChallanCard';
 
 const PendingReviewTab: React.FC = () => {
-  const { getChallansByStatus, approveChallan, rejectChallan, modifyChallan } = useChallanContext();
+  const { getChallansByStatus, approveChallan, rejectChallan, modifyChallan, updateChallanWithStepAnalysis, updateChallanStatus } = useChallanContext();
   const pendingChallans = getChallansByStatus('pending-review');
   const [currentIndex, setCurrentIndex] = useState(0);
+  const [isReAnalyzing, setIsReAnalyzing] = useState(false);
 
   const handleNext = () => {
     if (currentIndex < pendingChallans.length - 1) {
@@ -20,7 +22,7 @@ const PendingReviewTab: React.FC = () => {
     }
   };
 
-  const handleAction = (action: 'approve' | 'reject' | 'modify', reason?: string, updatedChallan?: any) => {
+  const handleAction = async (action: 'approve' | 'reject' | 'modify', reason?: string, updatedChallan?: any) => {
     const currentChallan = pendingChallans[currentIndex];
     
     if (action === 'approve') {
@@ -40,8 +42,43 @@ const PendingReviewTab: React.FC = () => {
         setCurrentIndex(currentIndex - 1);
       }
     } else if (action === 'modify' && updatedChallan) {
-      modifyChallan(currentChallan.id, updatedChallan);
-      console.log('Challan modified:', currentChallan.id, updatedChallan);
+      // Check if license plate was modified
+      if (updatedChallan.plateNumber !== currentChallan.plateNumber && updatedChallan.plateNumber) {
+        console.log('🔄 License plate modified, triggering re-analysis...');
+        setIsReAnalyzing(true);
+        
+        try {
+          // Update challan status to processing
+          updateChallanStatus(currentChallan.id, 'processing');
+          
+          // Trigger re-analysis with corrected license plate
+          const reAnalysisResult = await apiService.reAnalyzeWithCorrectedPlate(
+            currentChallan.originalFile!,
+            updatedChallan.plateNumber
+          );
+          
+          console.log('✅ Re-analysis completed:', reAnalysisResult);
+          
+          // Update challan with new analysis results
+          updateChallanWithStepAnalysis(currentChallan.id, reAnalysisResult);
+          
+          alert('License plate updated and re-analysis completed successfully!');
+          
+        } catch (error) {
+          console.error('Failed to re-analyze with corrected plate:', error);
+          
+          // Revert status back to pending-review on error
+          updateChallanStatus(currentChallan.id, 'pending-review');
+          
+          alert(`Re-analysis failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
+        } finally {
+          setIsReAnalyzing(false);
+        }
+      } else {
+        // Regular modification (no license plate change)
+        modifyChallan(currentChallan.id, updatedChallan);
+        console.log('Challan modified:', currentChallan.id, updatedChallan);
+      }
     }
   };
 
@@ -98,14 +135,15 @@ const PendingReviewTab: React.FC = () => {
         </div>
       </div>
 
-      <ChallanCard
-        challan={pendingChallans[currentIndex]}
-        onNext={handleNext}
-        onPrevious={handlePrevious}
-        onAction={handleAction}
-        canGoNext={currentIndex < pendingChallans.length - 1}
-        canGoPrevious={currentIndex > 0}
-      />
+              <ChallanCard
+          challan={pendingChallans[currentIndex]}
+          onNext={handleNext}
+          onPrevious={handlePrevious}
+          onAction={handleAction}
+          canGoNext={currentIndex < pendingChallans.length - 1}
+          canGoPrevious={currentIndex > 0}
+          isParentReAnalyzing={isReAnalyzing}
+        />
     </div>
   );
 };
