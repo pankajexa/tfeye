@@ -276,7 +276,8 @@ const ChallanCard: React.FC<ChallanCardProps> = ({
     const colors = {
       'No Helmet': 'bg-red-100 text-red-800 border-red-200',
       'Cell Phone Driving': 'bg-orange-100 text-orange-800 border-orange-200',
-      'Triple Riding': 'bg-purple-100 text-purple-800 border-purple-200'
+      'Triple Riding': 'bg-purple-100 text-purple-800 border-purple-200',
+      'Wrong Side Driving': 'bg-yellow-100 text-yellow-800 border-yellow-200'
     };
     
     return colors[violationType as keyof typeof colors] || 'bg-gray-100 text-gray-800 border-gray-200';

@@ -109,7 +109,7 @@ export interface StepAnalysisResponse {
 
 // Step 6 Violation Detection Types
 export interface ViolationDetection {
-  violation_type: 'No Helmet' | 'Cell Phone Driving' | 'Triple Riding';
+  violation_type: 'No Helmet' | 'Cell Phone Driving' | 'Triple Riding' | 'Wrong Side Driving';
   detected: boolean;
   confidence: number;
   description: string;

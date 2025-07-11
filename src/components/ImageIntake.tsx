@@ -549,7 +549,8 @@ const ImageIntake: React.FC = () => {
     const colors = {
       'No Helmet': 'bg-red-100 text-red-800',
       'Cell Phone Driving': 'bg-orange-100 text-orange-800',
-      'Triple Riding': 'bg-purple-100 text-purple-800'
+      'Triple Riding': 'bg-purple-100 text-purple-800',
+      'Wrong Side Driving': 'bg-yellow-100 text-yellow-800'
     };
     
     return colors[violationType as keyof typeof colors] || 'bg-gray-100 text-gray-800';
