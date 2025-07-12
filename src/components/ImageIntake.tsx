@@ -318,8 +318,21 @@ const ImageIntake: React.FC = () => {
 
       // Check for license plate extraction failures
       const step2Data = stepAnalysisResponse.results.step2?.data;
-      if (!step1Data?.extracted_license_plate && !step2Data?.license_plate) {
+      const step3Data = stepAnalysisResponse.results.step3?.data;
+      const step6Data = stepAnalysisResponse.results.step6?.data;
+      
+      // Check multiple sources for license plate
+      const licensePlateDetected = step1Data?.extracted_license_plate || 
+                                   step2Data?.license_plate || 
+                                   step3Data?.license_plate ||
+                                   step6Data?.license_plate;
+      
+      if (!licensePlateDetected) {
         console.log('🚫 Image rejected - no license plate detected');
+        console.log('🔍 Debug - step1Data:', step1Data);
+        console.log('🔍 Debug - step2Data:', step2Data);
+        console.log('🔍 Debug - step3Data:', step3Data);
+        console.log('🔍 Debug - step6Data:', step6Data);
         
         setAnalyzedImages(prev => prev.map(img => 
           img.id === imageFile.id 
@@ -343,11 +356,10 @@ const ImageIntake: React.FC = () => {
 
       // Extract simplified results for successfully analyzed images
       const results = stepAnalysisResponse.results;
-      const step6Data = results.step6?.data;
       const step5Data = results.step5?.data;
 
       // Extract simplified data
-      const detectedPlateNumber = step1Data?.extracted_license_plate || step2Data?.license_plate;
+      const detectedPlateNumber = licensePlateDetected;
       const violationAnalysis = step6Data?.violation_analysis;
       const violationCount = violationAnalysis?.detected_violation_count || 0;
       const violationTypes = violationAnalysis?.violation_types_found || [];

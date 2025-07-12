@@ -192,8 +192,11 @@ export const ChallanProvider: React.FC<ChallanProviderProps> = ({ children }) =>
             confidence: vehicleComparison.confidence_score
           })) : [];
 
-        // Extract license plate from Step 1 or Step 2
-        const extractedPlate = step1Data?.extracted_license_plate || step2Data?.license_plate;
+        // Extract license plate from multiple sources
+        const extractedPlate = step1Data?.extracted_license_plate || 
+                              step2Data?.license_plate || 
+                              step3Data?.license_plate ||
+                              step6Data?.license_plate;
 
         const updatedChallan = {
           ...challan,
