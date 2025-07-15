@@ -216,34 +216,70 @@ const ChallanCard: React.FC<ChallanCardProps> = ({
     console.log('  vehicleMatches:', challan.vehicleMatches);
     console.log('  rtaData:', challan.rtaData);
 
-    // Use Step 5 comparison results if available
+    // Use Step 5 comparison results if available - UPDATED FOR BACKEND STRUCTURE
     if (challan.vehicleComparison?.parameter_analysis) {
       console.log('✅ Using Step 5 comparison data');
-      const analysis = challan.vehicleComparison.parameter_analysis;
+      const analysis = challan.vehicleComparison.parameter_analysis as any; // Type assertion for dynamic structure
+      
+      // Handle backend's actual structure: {ai, rta, match} instead of {ai_value, rta_value, match_status}
       return [
         {
           field: 'Make',
-          rtaData: analysis.make?.rta_value || 'Not Available',
-          aiDetected: analysis.make?.ai_value || 'Not Detected',
-          match: analysis.make?.match_status === 'MATCH'
+          rtaData: analysis.make_brand?.rta || analysis.make?.rta_value || analysis.make?.rta || 'Not Available',
+          aiDetected: analysis.make_brand?.ai || analysis.make?.ai_value || analysis.make?.ai || 'Not Detected', 
+          match: analysis.make_brand?.match || (analysis.make?.match_status === 'MATCH') || analysis.make?.match || false
         },
         {
           field: 'Model', 
-          rtaData: analysis.model?.rta_value || 'Not Available',
-          aiDetected: analysis.model?.ai_value || 'Not Detected',
-          match: analysis.model?.match_status === 'MATCH'
+          rtaData: analysis.model?.rta_value || analysis.model?.rta || 'Not Available',
+          aiDetected: analysis.model?.ai_value || analysis.model?.ai || 'Not Detected',
+          match: (analysis.model?.match_status === 'MATCH') || analysis.model?.match || false
         },
         {
           field: 'Color',
-          rtaData: analysis.color?.rta_value || 'Not Available',
-          aiDetected: analysis.color?.ai_value || 'Not Detected',
-          match: analysis.color?.match_status === 'MATCH'
+          rtaData: analysis.color?.rta_value || analysis.color?.rta || 'Not Available',
+          aiDetected: analysis.color?.ai_value || analysis.color?.ai || 'Not Detected',
+          match: (analysis.color?.match_status === 'MATCH') || analysis.color?.match || false
         },
         {
           field: 'Vehicle Type',
-          rtaData: analysis.vehicle_type?.rta_value || 'Not Available',
-          aiDetected: analysis.vehicle_type?.ai_value || 'Not Detected',
-          match: analysis.vehicle_type?.match_status === 'MATCH'
+          rtaData: analysis.vehicle_type?.rta_value || analysis.vehicle_type?.rta || 'Not Available',
+          aiDetected: analysis.vehicle_type?.ai_value || analysis.vehicle_type?.ai || 'Not Detected',
+          match: (analysis.vehicle_type?.match_status === 'MATCH') || analysis.vehicle_type?.match || false
+        }
+      ];
+    }
+
+    // ALSO check Step 5 data directly from stepAnalysisResponse
+    const step5Data = challan.stepAnalysisResponse?.results?.step5?.data;
+    if (step5Data?.comparison_result?.parameter_analysis) {
+      console.log('✅ Using Step 5 data from stepAnalysisResponse');
+      const analysis = step5Data.comparison_result.parameter_analysis as any; // Type assertion for dynamic structure
+      
+      return [
+        {
+          field: 'Make',
+          rtaData: analysis.make_brand?.rta || analysis.make?.rta || 'Not Available',
+          aiDetected: analysis.make_brand?.ai || analysis.make?.ai || 'Not Detected',
+          match: analysis.make_brand?.match || analysis.make?.match || false
+        },
+        {
+          field: 'Model',
+          rtaData: analysis.model?.rta || 'Not Available', 
+          aiDetected: analysis.model?.ai || 'Not Detected',
+          match: analysis.model?.match || false
+        },
+        {
+          field: 'Color',
+          rtaData: analysis.color?.rta || 'Not Available',
+          aiDetected: analysis.color?.ai || 'Not Detected',
+          match: analysis.color?.match || false
+        },
+        {
+          field: 'Vehicle Type',
+          rtaData: analysis.vehicle_type?.rta || 'Not Available',
+          aiDetected: analysis.vehicle_type?.ai || 'Not Detected',
+          match: analysis.vehicle_type?.match || false
         }
       ];
     }
@@ -252,34 +288,34 @@ const ChallanCard: React.FC<ChallanCardProps> = ({
     const step3Data = challan.stepAnalysisResponse?.results?.step3?.data;
     const step4Data = challan.stepAnalysisResponse?.results?.step4?.data;
     
-    if (step3Data?.rta_data && step4Data?.vehicle_analysis) {
-      console.log('✅ Using Step 3 RTA + Step 4 AI data');
-      const rtaData = step3Data.rta_data;
-      const aiAnalysis = step4Data.vehicle_analysis;
+    if (step3Data?.rta_data && step4Data?.rta_data) {
+      console.log('✅ Using Step 3 RTA + Step 4 RTA data');
+      const rtaData = step4Data.rta_data; // Step 4 contains the RTA lookup result
+      const step5Visual = step5Data?.visual_analysis; // Step 5 contains AI analysis
       
       return [
         {
           field: 'Make',
           rtaData: rtaData.make || 'Not Available',
-          aiDetected: aiAnalysis.make || 'Not Detected',
+          aiDetected: step5Visual?.make_brand || 'Not Detected',
           match: false // No comparison done yet
         },
         {
           field: 'Model', 
           rtaData: rtaData.model || 'Not Available',
-          aiDetected: aiAnalysis.model || 'Not Detected',
+          aiDetected: step5Visual?.model || 'Not Detected',
           match: false
         },
         {
           field: 'Color',
           rtaData: rtaData.color || 'Not Available',
-          aiDetected: aiAnalysis.color || 'Not Detected',
+          aiDetected: step5Visual?.color || 'Not Detected',
           match: false
         },
         {
           field: 'Vehicle Type',
           rtaData: rtaData.vehicleClass || 'Not Available',
-          aiDetected: aiAnalysis.vehicle_type || 'Not Detected',
+          aiDetected: step5Visual?.vehicle_type || 'Not Detected',
           match: false
         }
       ];

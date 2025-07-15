@@ -206,6 +206,17 @@ You are a traffic violation detector. Your job is to find violations and identif
         console.log(`🚨 Step 2: Found ${violationCount} violation(s)`);
         console.log(`🎯 Primary violating vehicle: ${assessment.primary_violating_vehicle.description}`);
         
+        // CRITICAL FIX: Deduplicate violation types to prevent "No Helmet, No Helmet, No Helmet, No Helmet"
+        const detectedViolationTypes = assessment.violations_detected
+          .filter(v => v.detected)
+          .map(v => v.violation_type);
+        
+        const uniqueViolationTypes = [...new Set(detectedViolationTypes)]; // Remove duplicates
+        
+        console.log(`🔧 DEDUPLICATION: ${detectedViolationTypes.length} raw violations → ${uniqueViolationTypes.length} unique violations`);
+        console.log(`🔧 Raw violations: [${detectedViolationTypes.join(', ')}]`);
+        console.log(`🔧 Unique violations: [${uniqueViolationTypes.join(', ')}]`);
+        
         return {
           success: true,
           step: 2,
@@ -214,8 +225,8 @@ You are a traffic violation detector. Your job is to find violations and identif
             status: 'VIOLATION_FOUND',
             violations_detected: assessment.violations_detected,
             primary_violating_vehicle: assessment.primary_violating_vehicle,
-            violation_count: violationCount,
-            violation_types: assessment.violations_detected.filter(v => v.detected).map(v => v.violation_type)
+            violation_count: uniqueViolationTypes.length, // Use unique count
+            violation_types: uniqueViolationTypes // Use deduplicated array
           }
         };
       } else {
@@ -812,7 +823,7 @@ ${JSON.stringify(rtaData, null, 2)}
             violations_detected: step2Result.data.violations_detected || [],
             overall_assessment: {
               total_violations: step2Result.data.violation_count || 0,
-              violation_summary: `Violations detected: ${step2Result.data.violation_types.join(', ')}`,
+              violation_summary: step2Result.data.violation_count > 0 ? `Violations detected: ${step2Result.data.violation_types.join(', ')}` : 'No violations detected',
               image_clarity_for_detection: 'good',
               analysis_confidence: 0.9,
               analysis_method: 'simplified_violation_first_analysis'
@@ -823,7 +834,7 @@ ${JSON.stringify(rtaData, null, 2)}
               notes: `License plate extracted from violating vehicle. Vehicle: ${step2Result.data.primary_violating_vehicle?.description || 'N/A'}`
             },
             detected_violation_count: step2Result.data.violation_count || 0,
-            violation_types_found: step2Result.data.violation_types || []
+            violation_types_found: step2Result.data.violation_types || [] // This now contains deduplicated violations
           },
           detection_method: 'Simplified Violation-First Analysis',
           detection_possible: true,
