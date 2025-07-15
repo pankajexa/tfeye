@@ -24,8 +24,5 @@ dist-ssr
 *.sw?
 .env
 
-# Backend (separate repository)
-backend/
-
 # Environment files
 .env.local
