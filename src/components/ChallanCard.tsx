@@ -80,6 +80,10 @@ const ChallanCard: React.FC<ChallanCardProps> = ({
 
   // Edit functionality handlers
   const startEditing = (field: string, currentValue: string) => {
+    console.log('✏️ startEditing called!');
+    console.log('  📋 Field:', field);
+    console.log('  📋 Current value:', currentValue);
+    
     setEditingField(field);
     const fieldKey = field.toLowerCase().replace(' ', '').replace('type', 'Type');
     setEditedValues(prev => ({
@@ -87,6 +91,8 @@ const ChallanCard: React.FC<ChallanCardProps> = ({
       [fieldKey]: currentValue
     }));
     setIsEditing(true);
+    
+    console.log('  ✅ Editing state set, fieldKey:', fieldKey);
   };
 
   const cancelEditing = () => {
@@ -102,13 +108,25 @@ const ChallanCard: React.FC<ChallanCardProps> = ({
   };
 
   const saveEdit = async (field: string) => {
+    console.log('🚨 saveEdit function called!');
+    console.log('  📋 Field:', field);
+    console.log('  📋 isReAnalyzing:', isReAnalyzing);
+    console.log('  📋 isParentReAnalyzing:', isParentReAnalyzing);
+    console.log('  📋 editedValues:', editedValues);
+    
     const fieldKey = field.toLowerCase().replace(' ', '').replace('type', 'Type');
     const newValue = editedValues[fieldKey as keyof typeof editedValues];
     
+    console.log('  📋 fieldKey:', fieldKey);
+    console.log('  📋 newValue:', newValue);
+    
     if (!newValue || newValue.trim() === '') {
+      console.log('  ❌ Empty value detected, showing alert');
       alert('Please enter a valid value');
       return;
     }
+    
+    console.log('  ✅ Value validation passed, proceeding...');
 
     setIsReAnalyzing(true);
     
@@ -540,6 +558,14 @@ const ChallanCard: React.FC<ChallanCardProps> = ({
             </div>
 
             {/* Editable License Plate Display */}
+            {(() => {
+              if (challan.plateNumber) {
+                console.log('🏷️ License plate section rendered:', challan.plateNumber);
+                console.log('  📋 editingField:', editingField);
+                console.log('  📋 isEditing:', isEditing);
+              }
+              return null;
+            })()}
             {challan.plateNumber && (
               <div className="space-y-3">
                 <h4 className="text-sm font-medium text-gray-900 flex items-center">
@@ -547,6 +573,11 @@ const ChallanCard: React.FC<ChallanCardProps> = ({
                   License Plate
                 </h4>
                 <div className="bg-gray-50 p-3 rounded-lg">
+                  {(() => {
+                    console.log('🔍 Render check: editingField === "License Plate"?', editingField === 'License Plate');
+                    console.log('  📋 editingField value:', editingField);
+                    return null;
+                  })()}
                   {editingField === 'License Plate' ? (
                     <div className="flex items-center space-x-2">
                       <input
@@ -558,9 +589,16 @@ const ChallanCard: React.FC<ChallanCardProps> = ({
                         autoFocus
                       />
                       <button
-                        onClick={() => saveEdit('License Plate')}
+                        onClick={() => {
+                          console.log('🖱️ Save button clicked!');
+                          console.log('  📋 Button disabled?', isReAnalyzing || isParentReAnalyzing);
+                          console.log('  📋 isReAnalyzing:', isReAnalyzing);
+                          console.log('  📋 isParentReAnalyzing:', isParentReAnalyzing);
+                          saveEdit('License Plate');
+                        }}
                         disabled={isReAnalyzing || isParentReAnalyzing}
                         className="inline-flex items-center p-2 border border-green-300 rounded-md text-green-700 bg-green-50 hover:bg-green-100 disabled:opacity-50"
+                        title={isReAnalyzing || isParentReAnalyzing ? 'Re-analysis in progress...' : 'Save license plate changes'}
                       >
                         <Save className="h-4 w-4" />
                       </button>
@@ -575,7 +613,12 @@ const ChallanCard: React.FC<ChallanCardProps> = ({
                     <div className="flex items-center justify-between">
                       <span className="text-blue-600 font-mono font-medium text-lg">{challan.plateNumber}</span>
                       <button
-                        onClick={() => startEditing('License Plate', challan.plateNumber || '')}
+                        onClick={() => {
+                          console.log('✏️ Edit button clicked!');
+                          console.log('  📋 Current plate:', challan.plateNumber);
+                          console.log('  📋 Button disabled?', isReAnalyzing || isParentReAnalyzing);
+                          startEditing('License Plate', challan.plateNumber || '');
+                        }}
                         disabled={isReAnalyzing || isParentReAnalyzing}
                         className="inline-flex items-center p-1 text-gray-400 hover:text-blue-600 disabled:opacity-50"
                         title="Edit license plate"
