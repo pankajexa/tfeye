@@ -611,6 +611,33 @@ const ChallanCard: React.FC<ChallanCardProps> = ({
                     <p className="text-gray-900">{challan.offenceDateTime?.time || new Date(challan.timestamp).toLocaleTimeString()}</p>
                   </div>
                 </div>
+                
+                {/* Timestamp Source Indicator */}
+                {challan.stepAnalysisResponse?.results?.step1?.data?.timestamp_extraction ? (
+                  <div className="mt-2 pt-2 border-t border-gray-200">
+                    {challan.stepAnalysisResponse.results.step1.data.timestamp_extraction.timestamp_found ? (
+                      <div className="flex items-center text-xs text-green-600">
+                        <CheckCircle className="h-3 w-3 mr-1" />
+                        <span>Extracted from image timestamp</span>
+                        <span className="ml-2 text-gray-500">
+                          ({challan.stepAnalysisResponse.results.step1.data.timestamp_extraction.timestamp_location})
+                        </span>
+                      </div>
+                    ) : (
+                      <div className="flex items-center text-xs text-gray-500">
+                        <Calendar className="h-3 w-3 mr-1" />
+                        <span>Using upload time (no embedded timestamp found)</span>
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  <div className="mt-2 pt-2 border-t border-gray-200">
+                    <div className="flex items-center text-xs text-gray-500">
+                      <Calendar className="h-3 w-3 mr-1" />
+                      <span>Using upload time</span>
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
 

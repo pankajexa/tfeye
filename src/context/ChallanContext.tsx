@@ -198,6 +198,38 @@ export const ChallanProvider: React.FC<ChallanProviderProps> = ({ children }) =>
                               step3Data?.license_plate ||
                               step6Data?.license_plate;
 
+        // ENHANCED: Extract timestamp from Step 1 analysis if available
+        let offenceDateTime = challan.offenceDateTime; // Keep original as fallback
+        
+        if (step1Data?.timestamp_extraction?.timestamp_found) {
+          const timestampData = step1Data.timestamp_extraction;
+          console.log('🕐 TIMESTAMP EXTRACTION: Found embedded timestamp in image');
+          console.log('  📅 Extracted Date:', timestampData.extracted_date);
+          console.log('  🕒 Extracted Time:', timestampData.extracted_time);
+          console.log('  📍 Location:', timestampData.timestamp_location);
+          console.log('  🎯 Confidence:', timestampData.timestamp_confidence);
+          
+          if (timestampData.extracted_date && timestampData.extracted_time) {
+            // Use extracted timestamp
+            offenceDateTime = {
+              date: timestampData.extracted_date,
+              time: timestampData.extracted_time
+            };
+            console.log('✅ Using extracted timestamp for offence date/time');
+          } else if (timestampData.extracted_date) {
+            // Use extracted date with current time
+            offenceDateTime = {
+              date: timestampData.extracted_date,
+              time: new Date().toLocaleTimeString()
+            };
+            console.log('✅ Using extracted date with current time');
+          } else {
+            console.log('⚠️ Partial timestamp data - keeping original');
+          }
+        } else {
+          console.log('ℹ️ No embedded timestamp found - using original upload time');
+        }
+
         const updatedChallan = {
           ...challan,
           status: newStatus,
@@ -213,6 +245,7 @@ export const ChallanProvider: React.FC<ChallanProviderProps> = ({ children }) =>
           rtaData: step3Data?.rta_data,
           vehicleMatches,
           rtaMatched: vehicleComparison?.overall_verdict === 'MATCH',
+          offenceDateTime, // Use extracted or fallback timestamp
           
           // Legacy compatibility
           vehicleDetails: step4Data?.vehicle_analysis ? {

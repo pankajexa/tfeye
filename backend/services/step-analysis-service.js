@@ -21,14 +21,24 @@ class StepAnalysisService {
     
     try {
       const prompt = `
-You are a traffic image quality inspector. Your ONLY job is to determine if this image is suitable for traffic violation analysis.
+You are a traffic image quality inspector and timestamp extractor. Your job is to assess image quality AND extract embedded timestamp information.
 
-**CHECK THESE CRITERIA:**
+**PRIMARY OBJECTIVES:**
+1. **Quality Assessment**: Determine if image is suitable for traffic violation analysis
+2. **Timestamp Extraction**: Find and extract embedded date/time information
 
-1. **Traffic Context**: Is this a traffic/road scene with vehicles?
-2. **Image Clarity**: Is the image clear enough to see vehicle details?
-3. **License Plate Visibility**: Are there visible license plates in the image (any vehicle)?
-4. **Overall Quality**: Can you clearly distinguish vehicles and their features?
+**QUALITY CHECK CRITERIA:**
+- Traffic Context: Is this a traffic/road scene with vehicles?
+- Image Clarity: Is the image clear enough to see vehicle details?
+- License Plate Visibility: Are there visible license plates in the image?
+- Overall Quality: Can you clearly distinguish vehicles and their features?
+
+**TIMESTAMP EXTRACTION:**
+- Look for embedded timestamp/date information in the image
+- Common locations: bottom-right corner, bottom-left corner, top corners
+- Formats may include: DD/MM/YYYY HH:MM:SS, DD-MM-YYYY HH:MM, MM/DD/YYYY HH:MM
+- May appear as white/yellow text overlay on dark background
+- Extract both date and time if available
 
 **STRICT DECISION RULES:**
 - If image is blurry/out of focus → REJECT
@@ -45,10 +55,24 @@ You are a traffic image quality inspector. Your ONLY job is to determine if this
   "visible_vehicles": true/false,
   "license_plates_visible": true/false,
   "image_clarity": "excellent|good|fair|poor",
-  "suitable_for_analysis": true/false
+  "suitable_for_analysis": true/false,
+  "timestamp_extraction": {
+    "timestamp_found": true/false,
+    "extracted_date": "15/07/2025|null",
+    "extracted_time": "19:12:54|null",
+    "timestamp_location": "bottom-right|bottom-left|top-right|top-left|not_found",
+    "timestamp_confidence": 0.90,
+    "raw_timestamp_text": "15/07/2025 19:12:54",
+    "extraction_notes": "Clear timestamp visible in bottom-right corner"
+  }
 }
 
-**Remember**: You are NOT detecting violations here, just checking if the image is good enough for analysis.
+**IMPORTANT**: 
+- Focus on finding clear, readable timestamps embedded by traffic cameras
+- If no timestamp is visible, set timestamp_found to false
+- Extract date in DD/MM/YYYY format if possible
+- Extract time in HH:MM:SS or HH:MM format
+- Be conservative - only extract if you're confident about the timestamp
 `;
 
       const imagePart = {
@@ -85,7 +109,8 @@ You are a traffic image quality inspector. Your ONLY job is to determine if this
             visible_vehicles: assessment.visible_vehicles,
             license_plates_visible: assessment.license_plates_visible,
             image_clarity: assessment.image_clarity,
-            suitable_for_analysis: assessment.suitable_for_analysis
+            suitable_for_analysis: assessment.suitable_for_analysis,
+            timestamp_extraction: assessment.timestamp_extraction
           }
         };
       } else {
@@ -103,7 +128,8 @@ You are a traffic image quality inspector. Your ONLY job is to determine if this
             visible_vehicles: assessment.visible_vehicles,
             license_plates_visible: assessment.license_plates_visible,
             image_clarity: assessment.image_clarity,
-            suitable_for_analysis: assessment.suitable_for_analysis
+            suitable_for_analysis: assessment.suitable_for_analysis,
+            timestamp_extraction: assessment.timestamp_extraction
           }
         };
       }

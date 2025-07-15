@@ -57,14 +57,25 @@ export interface VehicleMatch {
 
 // NEW: Enhanced Quality Assessment Types
 export interface QualityAssessmentData {
-  quality_category: 'GOOD' | 'NEEDS_BETTER_REVIEW' | 'BLURRY_NOT_FIT';
-  confidence: number;
-  reasoning: string;
+  status: 'QUALIFIED' | 'REJECTED';
+  reason: string;
+  quality_score: number;
+  visible_vehicles: boolean;
+  license_plates_visible: boolean;
+  image_clarity: 'excellent' | 'good' | 'fair' | 'poor';
   suitable_for_analysis: boolean;
-  license_plate_extractable: boolean;
-  extracted_license_plate?: string;
-  extraction_confidence?: number;
-  format_validation_failed?: boolean;
+  timestamp_extraction?: TimestampExtractionData;
+}
+
+// NEW: Timestamp Extraction Data structure
+export interface TimestampExtractionData {
+  timestamp_found: boolean;
+  extracted_date?: string | null;
+  extracted_time?: string | null;
+  timestamp_location?: 'bottom-right' | 'bottom-left' | 'top-right' | 'top-left' | 'not_found';
+  timestamp_confidence?: number;
+  raw_timestamp_text?: string;
+  extraction_notes?: string;
 }
 
 // NEW: Enhanced OCR Types
