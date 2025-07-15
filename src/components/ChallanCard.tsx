@@ -207,8 +207,18 @@ const ChallanCard: React.FC<ChallanCardProps> = ({
 
   // Helper function to create vehicle matches display from Step 5 comparison data
   const createVehicleMatches = () => {
+    // Debug logging to understand data structure
+    console.log('🔍 ChallanCard DEBUG - Vehicle Matches Data:');
+    console.log('  vehicleComparison:', challan.vehicleComparison);
+    console.log('  stepAnalysisResponse?.results?.step3:', challan.stepAnalysisResponse?.results?.step3);
+    console.log('  stepAnalysisResponse?.results?.step4:', challan.stepAnalysisResponse?.results?.step4);
+    console.log('  stepAnalysisResponse?.results?.step5:', challan.stepAnalysisResponse?.results?.step5);
+    console.log('  vehicleMatches:', challan.vehicleMatches);
+    console.log('  rtaData:', challan.rtaData);
+
     // Use Step 5 comparison results if available
     if (challan.vehicleComparison?.parameter_analysis) {
+      console.log('✅ Using Step 5 comparison data');
       const analysis = challan.vehicleComparison.parameter_analysis;
       return [
         {
@@ -238,12 +248,51 @@ const ChallanCard: React.FC<ChallanCardProps> = ({
       ];
     }
 
+    // Fallback to Step 3 RTA data + Step 4 AI analysis if Step 5 comparison isn't available
+    const step3Data = challan.stepAnalysisResponse?.results?.step3?.data;
+    const step4Data = challan.stepAnalysisResponse?.results?.step4?.data;
+    
+    if (step3Data?.rta_data && step4Data?.vehicle_analysis) {
+      console.log('✅ Using Step 3 RTA + Step 4 AI data');
+      const rtaData = step3Data.rta_data;
+      const aiAnalysis = step4Data.vehicle_analysis;
+      
+      return [
+        {
+          field: 'Make',
+          rtaData: rtaData.make || 'Not Available',
+          aiDetected: aiAnalysis.make || 'Not Detected',
+          match: false // No comparison done yet
+        },
+        {
+          field: 'Model', 
+          rtaData: rtaData.model || 'Not Available',
+          aiDetected: aiAnalysis.model || 'Not Detected',
+          match: false
+        },
+        {
+          field: 'Color',
+          rtaData: rtaData.color || 'Not Available',
+          aiDetected: aiAnalysis.color || 'Not Detected',
+          match: false
+        },
+        {
+          field: 'Vehicle Type',
+          rtaData: rtaData.vehicleClass || 'Not Available',
+          aiDetected: aiAnalysis.vehicle_type || 'Not Detected',
+          match: false
+        }
+      ];
+    }
+
     // Fallback to legacy vehicle matches
     if (challan.vehicleMatches && challan.vehicleMatches.length > 0) {
+      console.log('✅ Using legacy vehicle matches');
       return challan.vehicleMatches;
     }
 
     // Final fallback: Show RTA data status
+    console.log('⚠️ Using final fallback - no data available');
     const hasRTAData = challan.rtaData || (challan.stepAnalysisResponse?.results?.step3?.success);
     const rtaDataStatus = hasRTAData ? 'Analysis Pending' : 'RTA Data Not Found';
     
@@ -352,7 +401,7 @@ const ChallanCard: React.FC<ChallanCardProps> = ({
                 </span>
               </div>
 
-              {/* Detected Violations */}
+              {/* Detected Violations - Show detailed analysis if available, otherwise simple list */}
               {challan.violationAnalysis?.violations_detected?.some(v => v.detected) ? (
                 <div>
                   <span className="text-sm font-medium text-gray-600">Violations Found:</span>
@@ -387,29 +436,57 @@ const ChallanCard: React.FC<ChallanCardProps> = ({
                 </div>
               ) : null}
 
-              {/* Enforcement Action */}
-              {challan.violationAnalysis?.enforcement_recommendation && (
-                <div className="flex items-center justify-between">
-                  <span className="text-sm font-medium text-gray-600">Recommended Action:</span>
-                  <span className={`px-3 py-1 rounded-full text-sm font-medium ${
-                    challan.violationAnalysis.enforcement_recommendation.action === 'ISSUE_CHALLAN' ? 'bg-red-100 text-red-800' :
-                    challan.violationAnalysis.enforcement_recommendation.action === 'REVIEW_REQUIRED' ? 'bg-orange-100 text-orange-800' :
-                    'bg-green-100 text-green-800'
-                  }`}>
-                    {challan.violationAnalysis.enforcement_recommendation.action.replace('_', ' ')}
-                  </span>
+              {/* Additional violation details if available */}
+              {challan.violationAnalysis?.overall_assessment && (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
+                  <div>
+                    <span className="font-medium text-gray-600">Analysis Confidence:</span>
+                    <p className="text-gray-900">{(challan.violationAnalysis.overall_assessment.analysis_confidence * 100).toFixed(1)}%</p>
+                  </div>
+                  <div>
+                    <span className="font-medium text-gray-600">Image Clarity:</span>
+                    <p className="text-gray-900">{challan.violationAnalysis.overall_assessment.image_clarity_for_detection}</p>
+                  </div>
                 </div>
               )}
 
-              {/* Analysis Confidence */}
-              {challan.violationAnalysis?.overall_assessment?.analysis_confidence && (
-                <div className="flex items-center justify-between">
-                  <span className="text-sm font-medium text-gray-600">Analysis Confidence:</span>
-                  <span className="text-sm text-gray-900">
-                    {Math.round(challan.violationAnalysis.overall_assessment.analysis_confidence * 100)}%
-                  </span>
+              {/* Enforcement Action */}
+              {challan.violationAnalysis?.enforcement_recommendation && (
+                <div className="bg-white p-3 rounded border">
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm font-medium text-gray-600">Recommended Action:</span>
+                    <span className={`px-2 py-1 rounded text-xs font-medium ${
+                      challan.violationAnalysis.enforcement_recommendation.action === 'ISSUE_CHALLAN' ? 'bg-red-100 text-red-800' :
+                      challan.violationAnalysis.enforcement_recommendation.action === 'REVIEW_REQUIRED' ? 'bg-yellow-100 text-yellow-800' :
+                      'bg-green-100 text-green-800'
+                    }`}>
+                      {challan.violationAnalysis.enforcement_recommendation.action.replace('_', ' ')}
+                    </span>
+                  </div>
+                  {challan.violationAnalysis.enforcement_recommendation.notes && (
+                    <p className="text-sm text-gray-600 mt-2">{challan.violationAnalysis.enforcement_recommendation.notes}</p>
+                  )}
                 </div>
               )}
+              
+              {/* Additional Details */}
+              {challan.vehicleDetails && (
+                <div className="grid grid-cols-2 gap-4 text-sm">
+                  <div>
+                    <span className="font-medium text-gray-600">Vehicle Type:</span>
+                    <p className="text-gray-900">{challan.vehicleDetails.vehicleType}</p>
+                  </div>
+                  <div>
+                    <span className="font-medium text-gray-600">Plate Number:</span>
+                    <p className="text-gray-900 font-mono">{challan.plateNumber || 'Not detected'}</p>
+                  </div>
+                </div>
+              )}
+              
+              <div>
+                <span className="text-sm font-medium text-gray-600">Analysis Timestamp:</span>
+                <p className="text-sm text-gray-900 mt-1">{new Date(challan.timestamp).toLocaleString()}</p>
+              </div>
             </div>
           </div>
         )}
@@ -727,44 +804,7 @@ const ChallanCard: React.FC<ChallanCardProps> = ({
           )}
         </div>
 
-        {/* Simplified Violation Summary */}
-        <div className="space-y-3">
-          <h4 className="text-sm font-medium text-gray-900">Violation Summary</h4>
-          <div className="bg-gray-50 p-4 rounded-lg space-y-3">
-            <div>
-              <span className="text-sm font-medium text-gray-600">Detected Violations:</span>
-              <div className="mt-1 flex flex-wrap gap-2">
-                {challan.violations.map((violation, index) => (
-                  <span
-                    key={index}
-                    className="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-red-100 text-red-800"
-                  >
-                    {violation}
-                  </span>
-                ))}
-              </div>
-            </div>
-            
-            {/* Additional Details */}
-            {challan.vehicleDetails && (
-              <div className="grid grid-cols-2 gap-4 text-sm">
-                <div>
-                  <span className="font-medium text-gray-600">Vehicle Type:</span>
-                  <p className="text-gray-900">{challan.vehicleDetails.vehicleType}</p>
-                </div>
-                <div>
-                  <span className="font-medium text-gray-600">Plate Number:</span>
-                  <p className="text-gray-900 font-mono">{challan.plateNumber || 'Not detected'}</p>
-                </div>
-              </div>
-            )}
-            
-            <div>
-              <span className="text-sm font-medium text-gray-600">Analysis Timestamp:</span>
-              <p className="text-sm text-gray-900 mt-1">{new Date(challan.timestamp).toLocaleString()}</p>
-            </div>
-          </div>
-        </div>
+
 
         {/* Action Buttons */}
         <div className="border-t border-gray-200 pt-6">
