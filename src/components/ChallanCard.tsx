@@ -411,123 +411,6 @@ const ChallanCard: React.FC<ChallanCardProps> = ({
           </div>
         </div>
 
-
-
-        {/* Enhanced Violation Detection Results */}
-        {(challan.violationAnalysis || challan.violations.length > 0) && (
-          <div className="space-y-3">
-            <h4 className="text-sm font-medium text-gray-900 flex items-center">
-              <ShieldAlert className="h-4 w-4 mr-2" />
-              Violation Detection Results
-            </h4>
-            <div className="bg-gray-50 p-4 rounded-lg space-y-4">
-              {/* Overall Status */}
-              <div className="flex items-center justify-between">
-                <span className="text-sm font-medium text-gray-600">Detection Status:</span>
-                <span className={`px-3 py-1 rounded-full text-sm font-medium ${
-                  (challan.violationAnalysis?.overall_assessment?.total_violations || challan.violations.length) > 0 
-                    ? 'bg-red-100 text-red-800' 
-                    : 'bg-green-100 text-green-800'
-                }`}>
-                  {challan.violationAnalysis?.overall_assessment?.total_violations 
-                    ? `${challan.violationAnalysis.overall_assessment.total_violations} Violation(s) Detected`
-                    : challan.violations.length > 0 
-                      ? `${challan.violations.length} Violation(s) Detected`
-                      : 'No Violations Detected'
-                  }
-                </span>
-              </div>
-
-              {/* Detected Violations - Show detailed analysis if available, otherwise simple list */}
-              {challan.violationAnalysis?.violations_detected?.some(v => v.detected) ? (
-                <div>
-                  <span className="text-sm font-medium text-gray-600">Violations Found:</span>
-                  <div className="mt-2 flex flex-wrap gap-2">
-                    {challan.violationAnalysis.violations_detected
-                      .filter(violation => violation.detected)
-                      .map((violation, index) => (
-                        <span
-                          key={index}
-                          className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-medium border ${getViolationBadge(violation.violation_type)}`}
-                        >
-                          <ShieldAlert className="w-4 h-4 mr-1" />
-                          {violation.violation_type}
-                        </span>
-                      ))}
-                  </div>
-                </div>
-              ) : challan.violations.length > 0 ? (
-                <div>
-                  <span className="text-sm font-medium text-gray-600">Violations Found:</span>
-                  <div className="mt-2 flex flex-wrap gap-2">
-                    {challan.violations.map((violation, index) => (
-                      <span
-                        key={index}
-                        className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-medium border ${getViolationBadge(violation)}`}
-                      >
-                        <ShieldAlert className="w-4 h-4 mr-1" />
-                        {violation}
-                      </span>
-                    ))}
-                  </div>
-                </div>
-              ) : null}
-
-              {/* Additional violation details if available */}
-              {challan.violationAnalysis?.overall_assessment && (
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
-                  <div>
-                    <span className="font-medium text-gray-600">Analysis Confidence:</span>
-                    <p className="text-gray-900">{(challan.violationAnalysis.overall_assessment.analysis_confidence * 100).toFixed(1)}%</p>
-                  </div>
-                  <div>
-                    <span className="font-medium text-gray-600">Image Clarity:</span>
-                    <p className="text-gray-900">{challan.violationAnalysis.overall_assessment.image_clarity_for_detection}</p>
-                  </div>
-                </div>
-              )}
-
-              {/* Enforcement Action */}
-              {challan.violationAnalysis?.enforcement_recommendation && (
-                <div className="bg-white p-3 rounded border">
-                  <div className="flex items-center justify-between">
-                    <span className="text-sm font-medium text-gray-600">Recommended Action:</span>
-                    <span className={`px-2 py-1 rounded text-xs font-medium ${
-                      challan.violationAnalysis.enforcement_recommendation.action === 'ISSUE_CHALLAN' ? 'bg-red-100 text-red-800' :
-                      challan.violationAnalysis.enforcement_recommendation.action === 'REVIEW_REQUIRED' ? 'bg-yellow-100 text-yellow-800' :
-                      'bg-green-100 text-green-800'
-                    }`}>
-                      {challan.violationAnalysis.enforcement_recommendation.action.replace('_', ' ')}
-                    </span>
-                  </div>
-                  {challan.violationAnalysis.enforcement_recommendation.notes && (
-                    <p className="text-sm text-gray-600 mt-2">{challan.violationAnalysis.enforcement_recommendation.notes}</p>
-                  )}
-                </div>
-              )}
-              
-              {/* Additional Details */}
-              {challan.vehicleDetails && (
-                <div className="grid grid-cols-2 gap-4 text-sm">
-                  <div>
-                    <span className="font-medium text-gray-600">Vehicle Type:</span>
-                    <p className="text-gray-900">{challan.vehicleDetails.vehicleType}</p>
-                  </div>
-                  <div>
-                    <span className="font-medium text-gray-600">Plate Number:</span>
-                    <p className="text-gray-900 font-mono">{challan.plateNumber || 'Not detected'}</p>
-                  </div>
-                </div>
-              )}
-              
-              <div>
-                <span className="text-sm font-medium text-gray-600">Analysis Timestamp:</span>
-                <p className="text-sm text-gray-900 mt-1">{new Date(challan.timestamp).toLocaleString()}</p>
-              </div>
-            </div>
-          </div>
-        )}
-
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           {/* Officer Details */}
           <div className="space-y-4">
@@ -868,7 +751,74 @@ const ChallanCard: React.FC<ChallanCardProps> = ({
           )}
         </div>
 
+        {/* Simplified Violation Analysis - Moved to Bottom */}
+        {(challan.violationAnalysis || challan.violations.length > 0) && (
+          <div className="space-y-3">
+            <h4 className="text-sm font-medium text-gray-900 flex items-center">
+              <ShieldAlert className="h-4 w-4 mr-2" />
+              Violation Analysis
+            </h4>
+            <div className="bg-gray-50 p-4 rounded-lg space-y-3">
+              {/* Violation Status */}
+              <div className="flex items-center justify-between">
+                <span className="text-sm font-medium text-gray-600">Violation Status:</span>
+                <span className={`px-3 py-1 rounded-full text-sm font-medium ${
+                  (challan.violationAnalysis?.overall_assessment?.total_violations || challan.violations.length) > 0 
+                    ? 'bg-red-100 text-red-800' 
+                    : 'bg-green-100 text-green-800'
+                }`}>
+                  {challan.violationAnalysis?.overall_assessment?.total_violations 
+                    ? `${challan.violationAnalysis.overall_assessment.total_violations} Violation(s) Detected`
+                    : challan.violations.length > 0 
+                      ? `${challan.violations.length} Violation(s) Detected`
+                      : 'No Violations Detected'
+                  }
+                </span>
+              </div>
 
+              {/* Violations Found */}
+              {challan.violationAnalysis?.violations_detected?.some(v => v.detected) ? (
+                <div>
+                  <span className="text-sm font-medium text-gray-600">Violations Found:</span>
+                  <div className="mt-2 flex flex-wrap gap-2">
+                    {challan.violationAnalysis.violations_detected
+                      .filter(violation => violation.detected)
+                      .map((violation, index) => (
+                        <span
+                          key={index}
+                          className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-medium border ${getViolationBadge(violation.violation_type)}`}
+                        >
+                          <ShieldAlert className="w-4 h-4 mr-1" />
+                          {violation.violation_type}
+                        </span>
+                      ))}
+                  </div>
+                </div>
+              ) : challan.violations.length > 0 ? (
+                <div>
+                  <span className="text-sm font-medium text-gray-600">Violations Found:</span>
+                  <div className="mt-2 flex flex-wrap gap-2">
+                    {challan.violations.map((violation, index) => (
+                      <span
+                        key={index}
+                        className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-medium border ${getViolationBadge(violation)}`}
+                      >
+                        <ShieldAlert className="w-4 h-4 mr-1" />
+                        {violation}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              ) : null}
+
+              {/* Analysis Timestamp */}
+              <div>
+                <span className="text-sm font-medium text-gray-600">Analysis Timestamp:</span>
+                <p className="text-sm text-gray-900 mt-1">{new Date(challan.timestamp).toLocaleString()}</p>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Action Buttons */}
         <div className="border-t border-gray-200 pt-6">
