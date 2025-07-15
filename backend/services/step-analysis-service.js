@@ -700,6 +700,7 @@ ${JSON.stringify(rtaData, null, 2)}
             status: 'PLATE_NOT_EXTRACTED',
             license_plate: null, // Explicitly null so we know it failed
             confidence: 0,
+            requires_manual_correction: true, // CRITICAL: Mark step3 as requiring manual correction
             extraction_details: {
               target_vehicle_found: false,
               plate_visibility: 'not_readable',
@@ -711,7 +712,11 @@ ${JSON.stringify(rtaData, null, 2)}
           }
         };
         
+        // Assign the modified step3Result back to analysis results
+        analysis.results.step3 = step3Result;
+        
         console.log('✅ Created placeholder step3 result to continue workflow');
+        console.log('🔍 DEBUG: Updated step3Result with requires_manual_correction:', step3Result.data.requires_manual_correction);
       }
 
       // STEP 4: RTA Vehicle Details Lookup
@@ -791,6 +796,10 @@ ${JSON.stringify(rtaData, null, 2)}
         analysis.results.step2.data.requires_manual_correction = true;
         
         console.log('✅ COMPATIBILITY: Set up manual review placeholders');
+        console.log('🔍 DEBUG: Manual correction flags set:');
+        console.log('  🔧 step1.requires_manual_correction:', analysis.results.step1.data.requires_manual_correction);
+        console.log('  🔧 step2.requires_manual_correction:', analysis.results.step2.data.requires_manual_correction);
+        console.log('  🔧 step3.requires_manual_correction:', analysis.results.step3.data?.requires_manual_correction);
       }
 
       // STEP 6: Create violation result for frontend compatibility
