@@ -327,8 +327,12 @@ const ImageIntake: React.FC = () => {
                                    step3Data?.license_plate ||
                                    step6Data?.license_plate;
       
-      if (!licensePlateDetected) {
-        console.log('🚫 Image rejected - no license plate detected');
+      // Check if this is a manual review case (OCR failed but violations detected)
+      const requiresManualCorrection = step1Data?.requires_manual_correction || 
+                                      step2Data?.requires_manual_correction;
+      
+      if (!licensePlateDetected && !requiresManualCorrection) {
+        console.log('🚫 Image rejected - no license plate detected and no manual review flag');
         console.log('🔍 Debug - step1Data:', step1Data);
         console.log('🔍 Debug - step2Data:', step2Data);
         console.log('🔍 Debug - step3Data:', step3Data);
@@ -350,6 +354,42 @@ const ImageIntake: React.FC = () => {
         setTimeout(() => {
           setAnalyzedImages(prev => prev.filter(img => img.id !== imageFile.id));
         }, 5000);
+        
+        return;
+      }
+      
+      // Handle manual review case
+      if (!licensePlateDetected && requiresManualCorrection) {
+        console.log('⚠️ License plate not detected but violations found - proceeding to manual review');
+        
+        setAnalyzedImages(prev => prev.map(img => 
+          img.id === imageFile.id 
+            ? { 
+                ...img, 
+                status: 'completed' as const,
+                stepAnalysisResponse,
+                detectedPlateNumber: 'Manual correction required',
+                violationCount: violationAnalysis?.detected_violation_count || 0,
+                violationTypes,
+                vehicleMatch: false
+              } as AnalyzedImage
+            : img
+        ));
+
+        // Still update challan but as pending review for manual correction
+        updateChallanWithStepAnalysis(imageFile.challanId, stepAnalysisResponse);
+
+        // Update queue stats
+        setQueueStats(prev => ({ 
+          ...prev, 
+          completed: prev.completed + 1,
+          pending: prev.pending - 1
+        }));
+
+        // Auto-remove from local state after 8 seconds
+        setTimeout(() => {
+          setAnalyzedImages(prev => prev.filter(img => img.id !== imageFile.id));
+        }, 8000);
         
         return;
       }
