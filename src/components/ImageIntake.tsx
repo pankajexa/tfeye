@@ -321,6 +321,11 @@ const ImageIntake: React.FC = () => {
       const step3Data = stepAnalysisResponse.results.step3?.data;
       const step6Data = stepAnalysisResponse.results.step6?.data;
       
+      // Extract violation data early for use in manual review logic
+      const violationAnalysis = step6Data?.violation_analysis;
+      const violationTypes = violationAnalysis?.violation_types_found || [];
+      const violationCount = violationAnalysis?.detected_violation_count || 0;
+      
       // Check multiple sources for license plate
       const licensePlateDetected = step1Data?.extracted_license_plate || 
                                    step2Data?.license_plate || 
@@ -329,14 +334,21 @@ const ImageIntake: React.FC = () => {
       
       // Check if this is a manual review case (OCR failed but violations detected)
       const requiresManualCorrection = step1Data?.requires_manual_correction || 
-                                      step2Data?.requires_manual_correction;
+                                      step2Data?.requires_manual_correction ||
+                                      step3Data?.requires_manual_correction;
+      
+      console.log('🔍 DEBUGGING LICENSE PLATE DETECTION:');
+      console.log('  📋 licensePlateDetected:', licensePlateDetected);
+      console.log('  🔧 requiresManualCorrection:', requiresManualCorrection);
+      console.log('  📊 violationCount:', violationCount);
+      console.log('  🚨 violationTypes:', violationTypes);
+      console.log('  🔍 step1Data:', step1Data);
+      console.log('  🔍 step2Data:', step2Data);
+      console.log('  🔍 step3Data:', step3Data);
+      console.log('  🔍 step6Data:', step6Data);
       
       if (!licensePlateDetected && !requiresManualCorrection) {
         console.log('🚫 Image rejected - no license plate detected and no manual review flag');
-        console.log('🔍 Debug - step1Data:', step1Data);
-        console.log('🔍 Debug - step2Data:', step2Data);
-        console.log('🔍 Debug - step3Data:', step3Data);
-        console.log('🔍 Debug - step6Data:', step6Data);
         
         setAnalyzedImages(prev => prev.map(img => 
           img.id === imageFile.id 
@@ -369,7 +381,7 @@ const ImageIntake: React.FC = () => {
                 status: 'completed' as const,
                 stepAnalysisResponse,
                 detectedPlateNumber: 'Manual correction required',
-                violationCount: violationAnalysis?.detected_violation_count || 0,
+                violationCount,
                 violationTypes,
                 vehicleMatch: false
               } as AnalyzedImage
@@ -400,9 +412,6 @@ const ImageIntake: React.FC = () => {
 
       // Extract simplified data
       const detectedPlateNumber = licensePlateDetected;
-      const violationAnalysis = step6Data?.violation_analysis;
-      const violationCount = violationAnalysis?.detected_violation_count || 0;
-      const violationTypes = violationAnalysis?.violation_types_found || [];
       const vehicleComparison = step5Data?.comparison_result;
       const vehicleMatch = vehicleComparison?.overall_verdict === 'MATCH';
       
