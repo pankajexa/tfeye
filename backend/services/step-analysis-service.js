@@ -239,9 +239,16 @@ You are a traffic violation detector. Your job is to find violations and identif
         
         const uniqueViolationTypes = [...new Set(detectedViolationTypes)]; // Remove duplicates
         
+        // FRONTEND FIX: Also deduplicate the violations_detected array that frontend uses
+        const uniqueViolationsDetected = uniqueViolationTypes.map(violationType => {
+          // Find the first occurrence of each violation type
+          return assessment.violations_detected.find(v => v.detected && v.violation_type === violationType);
+        });
+        
         console.log(`🔧 DEDUPLICATION: ${detectedViolationTypes.length} raw violations → ${uniqueViolationTypes.length} unique violations`);
         console.log(`🔧 Raw violations: [${detectedViolationTypes.join(', ')}]`);
         console.log(`🔧 Unique violations: [${uniqueViolationTypes.join(', ')}]`);
+        console.log(`🔧 Frontend violations_detected array: ${uniqueViolationsDetected.length} items`);
         
         return {
           success: true,
@@ -249,7 +256,7 @@ You are a traffic violation detector. Your job is to find violations and identif
           step_name: 'Violation Detection & Vehicle Identification',
           data: {
             status: 'VIOLATION_FOUND',
-            violations_detected: assessment.violations_detected,
+            violations_detected: uniqueViolationsDetected, // Use deduplicated array for frontend
             primary_violating_vehicle: assessment.primary_violating_vehicle,
             violation_count: uniqueViolationTypes.length, // Use unique count
             violation_types: uniqueViolationTypes // Use deduplicated array

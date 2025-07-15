@@ -760,20 +760,22 @@ const ChallanCard: React.FC<ChallanCardProps> = ({
             </h4>
             <div className="bg-gray-50 p-4 rounded-lg space-y-3">
               {/* Violation Status */}
-              <div className="flex items-center justify-between">
+              <div>
                 <span className="text-sm font-medium text-gray-600">Violation Status:</span>
-                <span className={`px-3 py-1 rounded-full text-sm font-medium ${
-                  (challan.violationAnalysis?.overall_assessment?.total_violations || challan.violations.length) > 0 
-                    ? 'bg-red-100 text-red-800' 
-                    : 'bg-green-100 text-green-800'
-                }`}>
-                  {challan.violationAnalysis?.overall_assessment?.total_violations 
-                    ? `${challan.violationAnalysis.overall_assessment.total_violations} Violation(s) Detected`
-                    : challan.violations.length > 0 
-                      ? `${challan.violations.length} Violation(s) Detected`
-                      : 'No Violations Detected'
-                  }
-                </span>
+                <div className="mt-1">
+                  <span className={`inline-flex px-3 py-1 rounded-full text-sm font-medium ${
+                    (challan.violationAnalysis?.overall_assessment?.total_violations || challan.violations.length) > 0 
+                      ? 'bg-red-100 text-red-800' 
+                      : 'bg-green-100 text-green-800'
+                  }`}>
+                    {challan.violationAnalysis?.overall_assessment?.total_violations 
+                      ? `${challan.violationAnalysis.overall_assessment.total_violations} Violation(s) Detected`
+                      : challan.violations.length > 0 
+                        ? `${challan.violations.length} Violation(s) Detected`
+                        : 'No Violations Detected'
+                    }
+                  </span>
+                </div>
               </div>
 
               {/* Violations Found */}
