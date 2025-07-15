@@ -236,8 +236,8 @@ const ImageIntake: React.FC = () => {
       // Update challan status to processing
       updateChallanStatus(imageFile.challanId, 'processing');
 
-      // 🧪 TEMPORARY: Use test endpoint that returns hardcoded success
-      const stepAnalysisResponse = await apiService.testAnalyzeImageStep6(imageFile.file);
+      // Execute complete analysis workflow
+      const stepAnalysisResponse = await apiService.analyzeImageStep6(imageFile.file);
       
       console.log('✅ Analysis completed:', stepAnalysisResponse);
 
