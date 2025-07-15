@@ -266,6 +266,25 @@ class ApiService {
     return response.json();
   }
 
+  // TEST METHOD: Uses hardcoded successful response
+  async testAnalyzeImageStep6(imageFile: File): Promise<StepAnalysisResponse> {
+    console.log('🧪 USING TEST ENDPOINT - Will return hardcoded success');
+    const formData = new FormData();
+    formData.append('image', imageFile);
+
+    const response = await fetch(`${this.baseUrl}/api/test-step6-analysis`, {
+      method: 'POST',
+      body: formData,
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      throw new Error(errorData.error || `Test Step 6 analysis failed: ${response.status}`);
+    }
+
+    return response.json();
+  }
+
   // NEW: Step 5 Complete Analysis - Returns new structure
   async analyzeImageStep5(imageFile: File): Promise<StepAnalysisResponse> {
     const formData = new FormData();

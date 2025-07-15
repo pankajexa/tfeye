@@ -236,8 +236,8 @@ const ImageIntake: React.FC = () => {
       // Update challan status to processing
       updateChallanStatus(imageFile.challanId, 'processing');
 
-      // Execute complete analysis workflow
-      const stepAnalysisResponse = await apiService.analyzeImageStep6(imageFile.file);
+      // 🧪 TEMPORARY: Use test endpoint that returns hardcoded success
+      const stepAnalysisResponse = await apiService.testAnalyzeImageStep6(imageFile.file);
       
       console.log('✅ Analysis completed:', stepAnalysisResponse);
 
@@ -416,11 +416,11 @@ const ImageIntake: React.FC = () => {
   const processFiles = (files: File[]) => {
     const newImages: AnalyzedImage[] = files.map((file, index) => {
       const challanId = addChallan(file); // Add to global context
-      
-      return {
+    
+    return {
         id: Math.random().toString(36).substr(2, 9),
         challanId,
-        file,
+      file,
         preview: URL.createObjectURL(file),
         status: 'queued',
         retryCount: 0,
@@ -707,7 +707,7 @@ const ImageIntake: React.FC = () => {
                 ? 'border-blue-400 bg-blue-50' 
                 : backendStatus === 'offline' 
                   ? 'border-gray-200 bg-gray-50 opacity-50'
-                  : 'border-gray-300 hover:border-gray-400'
+                : 'border-gray-300 hover:border-gray-400'
             }`}
             onDrop={handleDrop}
             onDragOver={handleDragOver}
@@ -760,8 +760,8 @@ const ImageIntake: React.FC = () => {
                           src={image.preview}
                           alt="Traffic image"
                           className="w-20 h-20 object-cover rounded-lg border border-gray-200"
-                        />
-                      </div>
+                      />
+                    </div>
                       
                       {/* Simplified Analysis Display */}
                       <div className="flex-1 min-w-0">
@@ -776,8 +776,8 @@ const ImageIntake: React.FC = () => {
                             </span>
                             {image.status === 'completed' && (
                               <ArrowRight className="h-4 w-4 text-gray-400" />
-                            )}
-                          </div>
+                        )}
+                      </div>
                         </div>
 
                         {/* Results Summary */}
