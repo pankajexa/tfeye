@@ -305,18 +305,16 @@ const ImageIntake: React.FC = () => {
         return;
       }
 
-      // Check for vehicle analysis failures
-      const step4Data = stepAnalysisResponse.results.step4?.data;
-      console.log('🔍 DEBUGGING STEP4 VEHICLE CHECK:');
-      console.log('  📋 step4Data exists:', !!step4Data);
-      console.log('  📋 step4Data:', step4Data);
-      console.log('  📋 step4Data.vehicles_present:', step4Data?.vehicles_present);
-      console.log('  📋 Condition (!step4Data.vehicles_present):', !step4Data?.vehicles_present);
+      // Check for vehicle analysis failures - FIXED: Check step6 instead of step4
+      const step6DataForVehicleCheck = stepAnalysisResponse.results.step6?.data;
+      console.log('🔍 DEBUGGING STEP6 VEHICLE CHECK (FIXED):');
+      console.log('  📋 step6DataForVehicleCheck exists:', !!step6DataForVehicleCheck);
+      console.log('  📋 step6DataForVehicleCheck.vehicles_present:', step6DataForVehicleCheck?.vehicles_present);
+      console.log('  📋 Condition (!step6DataForVehicleCheck.vehicles_present):', !step6DataForVehicleCheck?.vehicles_present);
       
-      if (step4Data && !step4Data.vehicles_present) {
-        console.log('🚫 CRITICAL: Image rejected - no vehicles detected in step4');
-        console.log('🚫 CRITICAL: step4Data.vehicles_present =', step4Data.vehicles_present);
-        console.log('🚫 CRITICAL: This contradicts successful analysis in other steps!');
+      if (step6DataForVehicleCheck && !step6DataForVehicleCheck.vehicles_present) {
+        console.log('🚫 CRITICAL: Image rejected - no vehicles detected in step6');
+        console.log('🚫 CRITICAL: step6DataForVehicleCheck.vehicles_present =', step6DataForVehicleCheck.vehicles_present);
         
         setAnalyzedImages(prev => prev.map(img => 
           img.id === imageFile.id 
