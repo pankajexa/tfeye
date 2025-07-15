@@ -48,6 +48,10 @@ const ImageIntake: React.FC = () => {
 
   // Check backend status on component mount
   React.useEffect(() => {
+    console.log('🔧 FRONTEND ENVIRONMENT CHECK:');
+    console.log('  📡 VITE_BACKEND_API_URL:', import.meta.env.VITE_BACKEND_API_URL);
+    console.log('  🌍 Environment mode:', import.meta.env.MODE);
+    console.log('  🔍 All env vars:', import.meta.env);
     checkBackendStatus();
   }, []);
 
@@ -240,6 +244,14 @@ const ImageIntake: React.FC = () => {
       const stepAnalysisResponse = await apiService.analyzeImageStep6(imageFile.file);
       
       console.log('✅ Analysis completed:', stepAnalysisResponse);
+      console.log('🔍 FRONTEND DEBUG: Full response structure:');
+      console.log('  📋 Response success:', stepAnalysisResponse.success);
+      console.log('  📋 Response keys:', Object.keys(stepAnalysisResponse));
+      console.log('  📋 Results keys:', stepAnalysisResponse.results ? Object.keys(stepAnalysisResponse.results) : 'NO RESULTS');
+      console.log('  📋 Step1 data:', stepAnalysisResponse.results?.step1?.data);
+      console.log('  📋 Step2 data:', stepAnalysisResponse.results?.step2?.data);
+      console.log('  📋 Step3 data:', stepAnalysisResponse.results?.step3?.data);
+      console.log('  📋 Step6 data:', stepAnalysisResponse.results?.step6?.data);
 
       // Check Step 1 for various rejection conditions
       const step1Data = stepAnalysisResponse.results.step1?.data;
@@ -339,7 +351,14 @@ const ImageIntake: React.FC = () => {
       
       console.log('🔍 DEBUGGING LICENSE PLATE DETECTION:');
       console.log('  📋 licensePlateDetected:', licensePlateDetected);
+      console.log('  📋 step1Data?.extracted_license_plate:', step1Data?.extracted_license_plate);
+      console.log('  📋 step2Data?.license_plate:', step2Data?.license_plate);
+      console.log('  📋 step3Data?.license_plate:', step3Data?.license_plate);
+      console.log('  📋 step6Data?.license_plate:', step6Data?.license_plate);
       console.log('  🔧 requiresManualCorrection:', requiresManualCorrection);
+      console.log('  🔧 step1Data?.requires_manual_correction:', step1Data?.requires_manual_correction);
+      console.log('  🔧 step2Data?.requires_manual_correction:', step2Data?.requires_manual_correction);
+      console.log('  🔧 step3Data?.requires_manual_correction:', step3Data?.requires_manual_correction);
       console.log('  📊 violationCount:', violationCount);
       console.log('  🚨 violationTypes:', violationTypes);
       console.log('  🔍 step1Data:', step1Data);
@@ -348,7 +367,10 @@ const ImageIntake: React.FC = () => {
       console.log('  🔍 step6Data:', step6Data);
       
       if (!licensePlateDetected && !requiresManualCorrection) {
-        console.log('🚫 Image rejected - no license plate detected and no manual review flag');
+        console.log('🚫 CRITICAL: Image being rejected - no license plate detected and no manual review flag');
+        console.log('🚫 CRITICAL: This should NOT happen if backend returned success with license plates!');
+        console.log('🚫 CRITICAL: licensePlateDetected =', licensePlateDetected);
+        console.log('🚫 CRITICAL: requiresManualCorrection =', requiresManualCorrection);
         
         setAnalyzedImages(prev => prev.map(img => 
           img.id === imageFile.id 

@@ -250,6 +250,11 @@ class ApiService {
 
   // NEW: Step 6 Complete Analysis - Returns new structure
   async analyzeImageStep6(imageFile: File): Promise<StepAnalysisResponse> {
+    console.log('🚀 FRONTEND API: Starting Step 6 analysis');
+    console.log('  📡 Backend URL:', this.baseUrl);
+    console.log('  📡 Full endpoint:', `${this.baseUrl}/api/step6-analysis`);
+    console.log('  📁 Image file:', imageFile.name, imageFile.size, 'bytes');
+    
     const formData = new FormData();
     formData.append('image', imageFile);
 
@@ -258,12 +263,23 @@ class ApiService {
       body: formData,
     });
 
+    console.log('📥 FRONTEND API: Response received');
+    console.log('  📊 Status:', response.status, response.statusText);
+    console.log('  📊 Headers:', Object.fromEntries(response.headers.entries()));
+
     if (!response.ok) {
       const errorData = await response.json().catch(() => ({}));
+      console.error('💥 FRONTEND API: Request failed:', errorData);
       throw new Error(errorData.error || `Step 6 analysis failed: ${response.status}`);
     }
 
-    return response.json();
+    const jsonResponse = await response.json();
+    console.log('✅ FRONTEND API: JSON response received');
+    console.log('  📋 Response success:', jsonResponse.success);
+    console.log('  📋 Response keys:', Object.keys(jsonResponse));
+    console.log('  📋 Full response:', jsonResponse);
+    
+    return jsonResponse;
   }
 
   // TEST METHOD: Uses hardcoded successful response
