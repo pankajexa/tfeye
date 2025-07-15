@@ -123,8 +123,15 @@ const ChallanCard: React.FC<ChallanCardProps> = ({
           plateNumber: newValue.trim().toUpperCase()
         };
         
+        // Reset editing state first (before triggering re-analysis)
+        setEditingField(null);
+        setIsEditing(false);
+        
         // Call onAction to trigger full re-analysis
         onAction('modify', 'License plate corrected - re-analyzing', updatedChallan);
+        
+        // Return early - don't execute the vehicle details logic below
+        return;
         
       } else {
         // For vehicle details, run comparison API with updated data
@@ -192,11 +199,11 @@ const ChallanCard: React.FC<ChallanCardProps> = ({
         } else {
           throw new Error(comparisonResult.error || 'Comparison failed');
         }
+        
+        // Reset editing state for vehicle details
+        setEditingField(null);
+        setIsEditing(false);
       }
-      
-      // Reset editing state
-      setEditingField(null);
-      setIsEditing(false);
       
     } catch (error) {
       console.error('Failed to re-analyze:', error);
