@@ -15,7 +15,8 @@ import {
   Edit,
   Save,
   X,
-  RotateCcw
+  RotateCcw,
+  Camera
 } from 'lucide-react';
 import { Challan, useChallanContext } from '../context/ChallanContext';
 import ImageZoom from './ImageZoom';
@@ -539,15 +540,15 @@ const ChallanCard: React.FC<ChallanCardProps> = ({
                 <div className="grid grid-cols-2 gap-2 text-sm">
                   <div>
                     <span className="font-medium text-gray-600">PS Name:</span>
-                    <p className="text-gray-900">{challan.sectorOfficer?.psName || 'To be assigned'}</p>
+                    <p className="text-gray-900">{challan.sectorOfficer?.psName || 'Punjagutta Tr PS'}</p>
                   </div>
                   <div>
                     <span className="font-medium text-gray-600">Cadre:</span>
-                    <p className="text-gray-900">{challan.sectorOfficer?.cadre || 'To be assigned'}</p>
+                    <p className="text-gray-900">{challan.sectorOfficer?.cadre || 'CI1'}</p>
                   </div>
                   <div className="col-span-2">
                     <span className="font-medium text-gray-600">Name:</span>
-                    <p className="text-gray-900">{challan.sectorOfficer?.name || 'To be assigned'}</p>
+                    <p className="text-gray-900">{challan.sectorOfficer?.name || 'Ravinder Rao'}</p>
                   </div>
                 </div>
               </div>
@@ -555,25 +556,25 @@ const ChallanCard: React.FC<ChallanCardProps> = ({
 
             <div className="space-y-3">
               <h4 className="text-sm font-medium text-gray-900 flex items-center">
-                <User className="h-4 w-4 mr-2" />
+                <Camera className="h-4 w-4 mr-2" />
                 Image Captured By
               </h4>
               <div className="bg-gray-50 p-3 rounded-lg">
-                <div className="grid grid-cols-2 gap-2 text-sm">
+                <div className="text-sm space-y-1">
                   <div>
                     <span className="font-medium text-gray-600">Cadre:</span>
-                    <p className="text-gray-900">{challan.capturedBy?.cadre || 'System'}</p>
+                    <p className="text-gray-900">{challan.capturedBy?.cadre || 'Police Constable'}</p>
                   </div>
                   <div>
                     <span className="font-medium text-gray-600">Name:</span>
-                    <p className="text-gray-900">{challan.capturedBy?.name || 'AI System'}</p>
+                    <p className="text-gray-900">{challan.capturedBy?.name || 'Chaitanya'}</p>
                   </div>
                 </div>
               </div>
             </div>
           </div>
 
-          {/* Jurisdiction and Time */}
+          {/* Right Column */}
           <div className="space-y-4">
             <div className="space-y-3">
               <h4 className="text-sm font-medium text-gray-900 flex items-center">
@@ -584,11 +585,11 @@ const ChallanCard: React.FC<ChallanCardProps> = ({
                 <div className="text-sm space-y-1">
                   <div>
                     <span className="font-medium text-gray-600">PS Name:</span>
-                    <p className="text-gray-900">{challan.jurisdiction?.psName || 'To be determined'}</p>
+                    <p className="text-gray-900">{challan.jurisdiction?.psName || 'Punjagutta Traffic PS'}</p>
                   </div>
                   <div>
                     <span className="font-medium text-gray-600">Point Name:</span>
-                    <p className="text-gray-900">{challan.jurisdiction?.pointName || 'To be determined'}</p>
+                    <p className="text-gray-900">{challan.jurisdiction?.pointName || 'Vengal Rao Park junction'}</p>
                   </div>
                 </div>
               </div>

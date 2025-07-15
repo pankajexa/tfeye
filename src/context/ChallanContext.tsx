@@ -125,18 +125,18 @@ export const ChallanProvider: React.FC<ChallanProviderProps> = ({ children }) =>
       violations: [],
       plateNumber: undefined,
       sectorOfficer: {
-        psName: 'To be assigned',
-        cadre: 'To be assigned',
-        name: 'To be assigned'
+        psName: 'Punjagutta Tr PS',
+        cadre: 'CI1',
+        name: 'Ravinder Rao'
       },
       capturedBy: {
-        psName: 'System',
-        cadre: 'AI System',
-        name: 'AI System'
+        psName: 'Punjagutta Traffic PS',
+        cadre: 'Police Constable',
+        name: 'Chaitanya'
       },
       jurisdiction: {
-        psName: 'To be determined',
-        pointName: 'To be determined'
+        psName: 'Punjagutta Traffic PS',
+        pointName: 'Vengal Rao Park junction'
       },
       offenceDateTime: {
         date: new Date().toLocaleDateString(),
