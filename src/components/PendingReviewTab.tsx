@@ -42,9 +42,22 @@ const PendingReviewTab: React.FC = () => {
         setCurrentIndex(currentIndex - 1);
       }
     } else if (action === 'modify' && updatedChallan) {
+      console.log('🔧 PendingReviewTab: modify action received');
+      console.log('  📋 Current challan plate:', currentChallan.plateNumber);
+      console.log('  📋 Updated challan plate:', updatedChallan.plateNumber);
+      console.log('  📋 Are they different?', updatedChallan.plateNumber !== currentChallan.plateNumber);
+      console.log('  📋 Is new plate truthy?', !!updatedChallan.plateNumber);
+      console.log('  📋 Current challan has originalFile?', !!currentChallan.originalFile);
+      
       // Check if license plate was modified
       if (updatedChallan.plateNumber !== currentChallan.plateNumber && updatedChallan.plateNumber) {
         console.log('🔄 License plate modified, triggering re-analysis...');
+        console.log('  📁 Original file details:', {
+          name: currentChallan.originalFile?.name,
+          size: currentChallan.originalFile?.size,
+          type: currentChallan.originalFile?.type
+        });
+        
         setIsReAnalyzing(true);
         
         try {
@@ -52,12 +65,18 @@ const PendingReviewTab: React.FC = () => {
           updateChallanStatus(currentChallan.id, 'processing');
           
           // Trigger re-analysis with corrected license plate
+          console.log('  📡 Calling reAnalyzeWithCorrectedPlate API...');
+          console.log('  📋 File:', currentChallan.originalFile!.name);
+          console.log('  📋 Corrected plate:', updatedChallan.plateNumber);
+          
           const reAnalysisResult = await apiService.reAnalyzeWithCorrectedPlate(
             currentChallan.originalFile!,
             updatedChallan.plateNumber
           );
           
-          console.log('✅ Re-analysis completed:', reAnalysisResult);
+          console.log('✅ Re-analysis completed successfully!');
+          console.log('  📋 Result success:', reAnalysisResult.success);
+          console.log('  📋 Result keys:', Object.keys(reAnalysisResult));
           
           // Update challan with new analysis results
           updateChallanWithStepAnalysis(currentChallan.id, reAnalysisResult);
@@ -65,19 +84,25 @@ const PendingReviewTab: React.FC = () => {
           alert('License plate updated and re-analysis completed successfully!');
           
         } catch (error) {
-          console.error('Failed to re-analyze with corrected plate:', error);
+          console.error('💥 Failed to re-analyze with corrected plate:');
+          console.error('  📋 Error:', error);
+          console.error('  📋 Error message:', error instanceof Error ? error.message : 'Unknown error');
+          console.error('  📋 Error stack:', error instanceof Error ? error.stack : 'No stack trace');
           
           // Revert status back to pending-review on error
           updateChallanStatus(currentChallan.id, 'pending-review');
           
           alert(`Re-analysis failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
         } finally {
+          console.log('  🔄 Setting isReAnalyzing to false');
           setIsReAnalyzing(false);
         }
       } else {
         // Regular modification (no license plate change)
+        console.log('🔧 PendingReviewTab: Regular modification (no license plate change)');
+        console.log('  📋 Calling modifyChallan...');
         modifyChallan(currentChallan.id, updatedChallan);
-        console.log('Challan modified:', currentChallan.id, updatedChallan);
+        console.log('  ✅ Challan modified successfully:', currentChallan.id);
       }
     }
   };

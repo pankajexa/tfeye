@@ -115,7 +115,10 @@ const ChallanCard: React.FC<ChallanCardProps> = ({
     try {
       // If editing license plate, re-run the entire analysis
       if (field === 'License Plate') {
-        console.log('Re-analyzing with corrected license plate:', newValue);
+        console.log('🔧 ChallanCard: License plate edit triggered');
+        console.log('  📋 Original plate:', challan.plateNumber);
+        console.log('  📋 New plate:', newValue);
+        console.log('  📋 Cleaned new plate:', newValue.trim().toUpperCase());
         
         // Create updated challan with new plate number
         const updatedChallan = {
@@ -123,12 +126,17 @@ const ChallanCard: React.FC<ChallanCardProps> = ({
           plateNumber: newValue.trim().toUpperCase()
         };
         
+        console.log('  📋 Updated challan plate number:', updatedChallan.plateNumber);
+        console.log('  📋 Calling onAction with modify...');
+        
         // Reset editing state first (before triggering re-analysis)
         setEditingField(null);
         setIsEditing(false);
         
         // Call onAction to trigger full re-analysis
         onAction('modify', 'License plate corrected - re-analyzing', updatedChallan);
+        
+        console.log('  ✅ onAction called successfully');
         
         // Return early - don't execute the vehicle details logic below
         return;
