@@ -1,7 +1,8 @@
-import React from 'react';
-import { XCircle, AlertTriangle, Database, Car } from 'lucide-react';
+import React, { useState } from 'react';
+import { XCircle, AlertTriangle, Database, Car, Eye, X } from 'lucide-react';
 import { RejectedSubTab } from '../types';
 import { useChallanContext } from '../context/ChallanContext';
+import ImageZoom from './ImageZoom';
 
 interface RejectedTabProps {
   activeSubTab: RejectedSubTab;
@@ -10,6 +11,7 @@ interface RejectedTabProps {
 const RejectedTab: React.FC<RejectedTabProps> = ({ activeSubTab }) => {
   const { getChallansByStatus } = useChallanContext();
   const allRejectedChallans = getChallansByStatus('rejected');
+  const [selectedImage, setSelectedImage] = useState<{ src: string; alt: string; plateNumber?: string } | null>(null);
 
   // Filter rejected challans based on sub-tab
   const getFilteredChallans = () => {
@@ -98,12 +100,20 @@ const RejectedTab: React.FC<RejectedTabProps> = ({ activeSubTab }) => {
             {filteredChallans.map((challan) => (
               <div key={challan.id} className="p-6">
                 <div className="flex items-start space-x-4">
-                  <div className="flex-shrink-0">
+                  <div className="flex-shrink-0 relative group">
                     <img
                       src={challan.preview}
                       alt="Rejected traffic image"
-                      className="h-16 w-16 rounded-lg object-cover"
+                      className="h-16 w-16 rounded-lg object-cover cursor-pointer hover:opacity-80 transition-opacity"
+                      onClick={() => setSelectedImage({
+                        src: challan.preview || challan.image,
+                        alt: `Rejected traffic image - Challan ${challan.id}`,
+                        plateNumber: challan.plateNumber
+                      })}
                     />
+                    <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity bg-black bg-opacity-20 rounded-lg">
+                      <Eye className="h-5 w-5 text-white" />
+                    </div>
                   </div>
                   
                   <div className="flex-1 min-w-0">
@@ -188,6 +198,25 @@ const RejectedTab: React.FC<RejectedTabProps> = ({ activeSubTab }) => {
           </div>
         )}
       </div>
+
+      {/* Image Zoom Modal */}
+      {selectedImage && (
+        <div className="fixed inset-0 z-50 bg-black bg-opacity-90 flex items-center justify-center p-4">
+          <div className="relative max-w-7xl max-h-full">
+            <ImageZoom
+              src={selectedImage.src}
+              alt={selectedImage.alt}
+              plateNumber={selectedImage.plateNumber}
+            />
+            <button
+              onClick={() => setSelectedImage(null)}
+              className="absolute top-4 right-4 p-2 bg-black bg-opacity-50 text-white rounded-full hover:bg-opacity-70 transition-colors"
+            >
+              <X className="h-6 w-6" />
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
