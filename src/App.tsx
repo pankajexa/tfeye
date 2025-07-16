@@ -113,7 +113,9 @@ const AppContent: React.FC = () => {
       </div>
 
       {/* Main Content */}
-      {currentScreen === 'intake' && <ImageIntake />}
+      <div style={{ display: currentScreen === 'intake' ? 'block' : 'none' }}>
+        <ImageIntake />
+      </div>
       {currentScreen === 'review' && <ReviewChallans />}
       {currentScreen === 'rta-test' && <RTATestComponent />}
     </div>
