@@ -44,7 +44,7 @@ const ImageIntake: React.FC = () => {
     isPaused: false
   });
   
-  const { addChallan, updateChallanWithStepAnalysis, updateChallanStatus, getChallansByStatus } = useChallanContext();
+  const { addChallan, updateChallanWithStepAnalysis, updateChallanStatus, rejectChallan, getChallansByStatus } = useChallanContext();
 
   // Check backend status on component mount
   React.useEffect(() => {
@@ -176,8 +176,8 @@ const ImageIntake: React.FC = () => {
           pending: prev.pending - 1
         }));
         
-        // Update challan status to rejected
-        updateChallanStatus(imageFile.challanId, 'rejected');
+        // Update challan status to rejected with reason
+        rejectChallan(imageFile.challanId, 'Analysis failed after retries', 'System');
       }
     }
   };
@@ -281,7 +281,7 @@ const ImageIntake: React.FC = () => {
             : img
         ));
 
-        updateChallanStatus(imageFile.challanId, 'rejected');
+        rejectChallan(imageFile.challanId, rejectionReason, 'System');
         
         setTimeout(() => {
           setAnalyzedImages(prev => prev.filter(img => img.id !== imageFile.id));
@@ -305,7 +305,7 @@ const ImageIntake: React.FC = () => {
             : img
         ));
 
-        updateChallanStatus(imageFile.challanId, 'rejected');
+        rejectChallan(imageFile.challanId, 'Image quality too poor for analysis', 'System');
         
         setTimeout(() => {
           setAnalyzedImages(prev => prev.filter(img => img.id !== imageFile.id));
@@ -328,7 +328,7 @@ const ImageIntake: React.FC = () => {
             : img
         ));
 
-        updateChallanStatus(imageFile.challanId, 'rejected');
+        rejectChallan(imageFile.challanId, 'Image is not traffic-related', 'System');
         
         setTimeout(() => {
           setAnalyzedImages(prev => prev.filter(img => img.id !== imageFile.id));
@@ -359,7 +359,7 @@ const ImageIntake: React.FC = () => {
             : img
         ));
 
-        updateChallanStatus(imageFile.challanId, 'rejected');
+        rejectChallan(imageFile.challanId, 'No vehicles detected in image', 'System');
         
         setTimeout(() => {
           setAnalyzedImages(prev => prev.filter(img => img.id !== imageFile.id));
@@ -423,7 +423,7 @@ const ImageIntake: React.FC = () => {
             : img
         ));
 
-        updateChallanStatus(imageFile.challanId, 'rejected');
+        rejectChallan(imageFile.challanId, 'No license plate detected', 'System');
         
         setTimeout(() => {
           setAnalyzedImages(prev => prev.filter(img => img.id !== imageFile.id));
