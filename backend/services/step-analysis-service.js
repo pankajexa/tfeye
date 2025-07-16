@@ -12,67 +12,145 @@ class StepAnalysisService {
   }
 
   // =============================================================================
-  // STEP 1: IMAGE QUALITY & READINESS CHECK
-  // Purpose: Simple quality assessment - is image suitable for analysis?
+  // STEP 1: ENHANCED IMAGE QUALITY & READINESS CHECK
+  // Purpose: Stringent multi-layer quality assessment with specific obstruction detection
   // =============================================================================
   
   async step1_checkImageQuality(imageBuffer) {
-    console.log('🔍 STEP 1: Image Quality & Readiness Check...');
+    console.log('🔍 STEP 1: Enhanced Image Quality & Readiness Check...');
     
     try {
       const prompt = `
-You are a traffic image quality inspector and timestamp extractor. Your job is to assess image quality AND extract embedded timestamp information.
+You are an EXTREMELY STRICT traffic image quality inspector and timestamp extractor. Your job is to RIGOROUSLY assess image quality with ZERO TOLERANCE for poor quality images.
+
+**CRITICAL: BE VERY STRICT - When in doubt, REJECT the image. It's better to reject a borderline image than allow poor quality to proceed.**
 
 **PRIMARY OBJECTIVES:**
-1. **Quality Assessment**: Determine if image is suitable for traffic violation analysis
-2. **Timestamp Extraction**: Find and extract embedded date/time information
+1. **STRICT Quality Assessment**: Determine if image meets HIGH STANDARDS for traffic violation analysis
+2. **Obstruction Detection**: Specifically look for items blocking license plates
+3. **Technical Quality Check**: Assess sharpness, lighting, resolution
+4. **Timestamp Extraction**: Find embedded date/time information
 
-**QUALITY CHECK CRITERIA:**
-- Traffic Context: Is this a traffic/road scene with vehicles?
-- Image Clarity: Is the image clear enough to see vehicle details?
-- License Plate Visibility: Are there visible license plates in the image?
-- Overall Quality: Can you clearly distinguish vehicles and their features?
+**ULTRA-STRICT QUALITY CRITERIA:**
 
-**TIMESTAMP EXTRACTION:**
-- Look for embedded timestamp/date information in the image
-- Common locations: bottom-right corner, bottom-left corner, top corners
-- Formats may include: DD/MM/YYYY HH:MM:SS, DD-MM-YYYY HH:MM, MM/DD/YYYY HH:MM
-- May appear as white/yellow text overlay on dark background
-- Extract both date and time if available
+**1. LICENSE PLATE VISIBILITY (MOST CRITICAL):**
+- Are license plates CLEARLY READABLE without any obstructions?
+- REJECT if plates are blocked by: garlands, flowers, stickers, decorative items, mud, dirt
+- REJECT if plates are heavily tinted, dark, or modified
+- REJECT if plates are damaged, bent, or partially hidden
+- REJECT if text on plates is blurry, pixelated, or unclear
+- REJECT if plates are at extreme angles making reading difficult
 
-**STRICT DECISION RULES:**
-- If image is blurry/out of focus → REJECT
-- If no vehicles visible → REJECT  
-- If no license plates visible on any vehicle → REJECT
-- If not a traffic scene → REJECT
-- If image quality makes vehicle identification impossible → REJECT
+**2. IMAGE SHARPNESS & CLARITY:**
+- REJECT if image is even slightly blurry or out of focus
+- REJECT if vehicle details are not crystal clear
+- REJECT if there's motion blur affecting vehicles
+- REJECT if image is heavily pixelated or low resolution
+
+**3. LIGHTING CONDITIONS:**
+- REJECT if image is too dark (night images with poor lighting)
+- REJECT if image is overexposed (too bright, washed out)
+- REJECT if there are heavy shadows obscuring vehicles
+- REJECT if glare makes license plates unreadable
+
+**4. TRAFFIC CONTEXT:**
+- REJECT if no vehicles are visible
+- REJECT if not a traffic scene (indoor, non-road images)
+- REJECT if vehicles are too far away to analyze properly
+- REJECT if image shows only partial vehicles
+
+**5. TECHNICAL QUALITY:**
+- REJECT if image appears heavily compressed with artifacts
+- REJECT if image resolution seems too low for analysis
+- REJECT if colors are heavily distorted
+
+**SPECIFIC OBSTRUCTION DETECTION:**
+Look carefully for these common obstructions on license plates:
+- Flower garlands or marigold decorations
+- Religious symbols or decorative stickers
+- Mud, dirt, or grime covering plates
+- Damaged or bent license plates
+- Aftermarket plate covers or frames
+- Dark tinting or spray paint
+- Partial covering by vehicle parts or accessories
+
+**STRICT DECISION RULES - REJECT IF ANY OF THESE:**
+- Any obstruction visible on license plates (even small)
+- Plates not clearly readable due to lighting
+- Image lacks crystal clear sharpness
+- Extreme lighting conditions (too dark/bright)
+- Motion blur or camera shake
+- Low resolution or heavy compression
+- Not a proper traffic scene
+- Vehicles too distant for proper analysis
+- Any doubt about image quality
+
+**ACCEPTANCE CRITERIA - ACCEPT ONLY IF ALL TRUE:**
+- License plates are COMPLETELY CLEAR and unobstructed
+- Image is SHARP with excellent clarity
+- Good lighting with no extreme conditions
+- Clear traffic scene with vehicles
+- High enough resolution for detailed analysis
+- No technical quality issues
+
+**TIMESTAMP EXTRACTION (Secondary):**
+- Look for embedded timestamp/date in corners
+- Formats: DD/MM/YYYY HH:MM:SS, DD-MM-YYYY HH:MM, MM/DD/YYYY HH:MM
+- Extract if clearly visible, otherwise set timestamp_found to false
 
 **RESPONSE FORMAT:**
 {
   "status": "QUALIFIED|REJECTED",
-  "reason": "Brief explanation of decision",
-  "quality_score": 0.85,
-  "visible_vehicles": true/false,
-  "license_plates_visible": true/false,
-  "image_clarity": "excellent|good|fair|poor",
+  "primary_rejection_reason": "specific_reason_if_rejected",
+  "detailed_analysis": {
+    "license_plate_visibility": {
+      "score": 0.0-1.0,
+      "obstructions_detected": ["list_any_obstructions"],
+      "readability": "excellent|good|poor|unreadable",
+      "issues": ["specific_issues_found"]
+    },
+    "image_sharpness": {
+      "score": 0.0-1.0,
+      "blur_detected": true/false,
+      "clarity_level": "excellent|good|fair|poor"
+    },
+    "lighting_quality": {
+      "score": 0.0-1.0,
+      "lighting_condition": "excellent|good|too_dark|too_bright|mixed",
+      "shadows_present": true/false,
+      "glare_affecting_plates": true/false
+    },
+    "technical_quality": {
+      "resolution_adequate": true/false,
+      "compression_artifacts": true/false,
+      "color_distortion": true/false
+    },
+    "traffic_context": {
+      "vehicles_present": true/false,
+      "traffic_scene": true/false,
+      "vehicles_analyzable": true/false
+    }
+  },
+  "overall_quality_score": 0.0-1.0,
   "suitable_for_analysis": true/false,
+  "confidence_level": 0.0-1.0,
   "timestamp_extraction": {
     "timestamp_found": true/false,
-    "extracted_date": "15/07/2025|null",
-    "extracted_time": "19:12:54|null",
+    "extracted_date": "DD/MM/YYYY|null",
+    "extracted_time": "HH:MM:SS|null",
     "timestamp_location": "bottom-right|bottom-left|top-right|top-left|not_found",
-    "timestamp_confidence": 0.90,
-    "raw_timestamp_text": "15/07/2025 19:12:54",
-    "extraction_notes": "Clear timestamp visible in bottom-right corner"
+    "timestamp_confidence": 0.0-1.0,
+    "raw_timestamp_text": "extracted_text|null"
   }
 }
 
-**IMPORTANT**: 
-- Focus on finding clear, readable timestamps embedded by traffic cameras
-- If no timestamp is visible, set timestamp_found to false
-- Extract date in DD/MM/YYYY format if possible
-- Extract time in HH:MM:SS or HH:MM format
-- Be conservative - only extract if you're confident about the timestamp
+**REMEMBER:**
+- BE EXTREMELY STRICT - reject anything questionable
+- Focus on license plate clarity above all else
+- Any obstruction = immediate rejection
+- Poor lighting = immediate rejection
+- Any blur or unclear details = immediate rejection
+- When in doubt, ALWAYS REJECT
 `;
 
       const imagePart = {
@@ -86,7 +164,7 @@ You are a traffic image quality inspector and timestamp extractor. Your job is t
       const response = await result.response;
       const text = response.text();
 
-      console.log('📄 Step 1 raw response:', text);
+      console.log('📄 Step 1 ENHANCED raw response:', text);
 
       // Parse JSON response
       const jsonMatch = text.match(/\{[\s\S]*\}/);
@@ -97,51 +175,73 @@ You are a traffic image quality inspector and timestamp extractor. Your job is t
       const assessment = JSON.parse(jsonMatch[0]);
       
       if (assessment.status === 'QUALIFIED') {
-        console.log('✅ Step 1: Image QUALIFIED for analysis');
+        console.log('✅ Step 1 ENHANCED: Image QUALIFIED for analysis');
+        console.log('  📊 Overall quality score:', assessment.overall_quality_score);
+        console.log('  🎯 License plate readability:', assessment.detailed_analysis?.license_plate_visibility?.readability);
+        console.log('  💡 Image sharpness:', assessment.detailed_analysis?.image_sharpness?.clarity_level);
+        
         return {
           success: true,
           step: 1,
-          step_name: 'Image Quality & Readiness Check',
+          step_name: 'Enhanced Image Quality & Readiness Check',
           data: {
             status: 'QUALIFIED',
-            quality_score: assessment.quality_score,
-            reason: assessment.reason,
-            visible_vehicles: assessment.visible_vehicles,
-            license_plates_visible: assessment.license_plates_visible,
-            image_clarity: assessment.image_clarity,
+            overall_quality_score: assessment.overall_quality_score,
+            primary_rejection_reason: null,
+            detailed_analysis: assessment.detailed_analysis,
             suitable_for_analysis: assessment.suitable_for_analysis,
-            timestamp_extraction: assessment.timestamp_extraction
+            confidence_level: assessment.confidence_level,
+            timestamp_extraction: assessment.timestamp_extraction,
+            // Legacy fields for compatibility
+            quality_score: assessment.overall_quality_score,
+            reason: 'Image meets strict quality standards for analysis',
+            visible_vehicles: assessment.detailed_analysis?.traffic_context?.vehicles_present || true,
+            license_plates_visible: assessment.detailed_analysis?.license_plate_visibility?.score > 0.7,
+            image_clarity: assessment.detailed_analysis?.image_sharpness?.clarity_level || 'good'
           }
         };
       } else {
-        console.log('❌ Step 1: Image REJECTED -', assessment.reason);
+        console.log('❌ Step 1 ENHANCED: Image REJECTED -', assessment.primary_rejection_reason);
+        console.log('  📊 Overall quality score:', assessment.overall_quality_score);
+        console.log('  🚫 Rejection details:', assessment.detailed_analysis);
+        
+        // Log specific obstruction details if found
+        if (assessment.detailed_analysis?.license_plate_visibility?.obstructions_detected?.length > 0) {
+          console.log('  🎭 Obstructions detected:', assessment.detailed_analysis.license_plate_visibility.obstructions_detected);
+        }
+        
         return {
           success: false,
           step: 1,
-          step_name: 'Image Quality & Readiness Check',
-          error: `Image rejected: ${assessment.reason}`,
-          errorCode: 'IMAGE_QUALITY_REJECTED',
+          step_name: 'Enhanced Image Quality & Readiness Check',
+          error: `Image rejected: ${assessment.primary_rejection_reason}`,
+          errorCode: 'ENHANCED_IMAGE_QUALITY_REJECTED',
           data: {
             status: 'REJECTED',
-            quality_score: assessment.quality_score,
-            reason: assessment.reason,
-            visible_vehicles: assessment.visible_vehicles,
-            license_plates_visible: assessment.license_plates_visible,
-            image_clarity: assessment.image_clarity,
+            overall_quality_score: assessment.overall_quality_score,
+            primary_rejection_reason: assessment.primary_rejection_reason,
+            detailed_analysis: assessment.detailed_analysis,
             suitable_for_analysis: assessment.suitable_for_analysis,
-            timestamp_extraction: assessment.timestamp_extraction
+            confidence_level: assessment.confidence_level,
+            timestamp_extraction: assessment.timestamp_extraction,
+            // Legacy fields for compatibility
+            quality_score: assessment.overall_quality_score,
+            reason: assessment.primary_rejection_reason,
+            visible_vehicles: assessment.detailed_analysis?.traffic_context?.vehicles_present || false,
+            license_plates_visible: assessment.detailed_analysis?.license_plate_visibility?.score > 0.7,
+            image_clarity: assessment.detailed_analysis?.image_sharpness?.clarity_level || 'poor'
           }
         };
       }
 
     } catch (error) {
-      console.error('💥 Step 1 error:', error);
+      console.error('💥 Step 1 ENHANCED error:', error);
       return {
         success: false,
         step: 1,
-        step_name: 'Image Quality & Readiness Check',
+        step_name: 'Enhanced Image Quality & Readiness Check',
         error: error.message || 'Failed to assess image quality',
-        errorCode: 'STEP1_ASSESSMENT_FAILED'
+        errorCode: 'STEP1_ENHANCED_ASSESSMENT_FAILED'
       };
     }
   }
@@ -1031,7 +1131,7 @@ ${JSON.stringify(rtaData, null, 2)}
   }
 
   async categorizeImageQuality(imageBuffer) {
-    console.log('🔄 Legacy categorizeImageQuality - redirecting to Step 1...');
+    console.log('🔄 Legacy categorizeImageQuality - redirecting to Enhanced Step 1...');
     return await this.step1_checkImageQuality(imageBuffer);
   }
 

@@ -258,9 +258,58 @@ const ImageIntake: React.FC = () => {
       // Check Step 1 for various rejection conditions
       const step1Data = stepAnalysisResponse.results.step1?.data;
       
-      // Handle different rejection scenarios
+      // Handle enhanced quality assessment rejections
+      if (step1Data?.status === 'REJECTED') {
+        const rejectionReason = step1Data.primary_rejection_reason || 'Image quality insufficient for analysis';
+        const detailedAnalysis = step1Data.detailed_analysis;
+        
+        console.log('🚫 ENHANCED: Image rejected due to quality issues');
+        console.log('  📋 Rejection reason:', rejectionReason);
+        console.log('  📋 Quality score:', step1Data.overall_quality_score);
+        
+        // Create detailed error message based on analysis
+        let detailedError = rejectionReason;
+        
+        if (detailedAnalysis) {
+          // Add specific obstruction details
+          if (detailedAnalysis.license_plate_visibility?.obstructions_detected?.length > 0) {
+            detailedError += ` (Obstructions: ${detailedAnalysis.license_plate_visibility.obstructions_detected.join(', ')})`;
+          }
+          
+          // Add lighting issues
+          if (detailedAnalysis.lighting_quality?.glare_affecting_plates) {
+            detailedError += ' (Glare affecting license plates)';
+          }
+          
+          // Add sharpness issues
+          if (detailedAnalysis.image_sharpness?.blur_detected) {
+            detailedError += ' (Image blur detected)';
+          }
+        }
+        
+        setAnalyzedImages(prev => prev.map(img => 
+          img.id === imageFile.id 
+            ? { 
+                ...img, 
+                status: 'completed' as const,
+                stepAnalysisResponse,
+                error: detailedError
+              } as AnalyzedImage
+            : img
+        ));
+
+        updateChallanStatus(imageFile.challanId, 'rejected');
+        
+        setTimeout(() => {
+          setAnalyzedImages(prev => prev.filter(img => img.id !== imageFile.id));
+        }, 8000); // Longer display time for detailed messages
+        
+        return;
+      }
+
+      // Legacy rejection handling for backward compatibility
       if (step1Data?.response_type === 'bad_quality') {
-        console.log('🚫 Image rejected due to poor quality');
+        console.log('🚫 Image rejected due to poor quality (legacy)');
         
         setAnalyzedImages(prev => prev.map(img => 
           img.id === imageFile.id 
@@ -582,21 +631,49 @@ const ImageIntake: React.FC = () => {
     if (image.status === 'error') return 'Analysis failed';
     
     if (image.status === 'completed') {
-      // Check for different rejection reasons
+      // Check for different rejection reasons with enhanced categorization
       if (image.error) {
+        // Enhanced quality assessment rejections
+        if (image.error.includes('Obstructions:')) {
+          return 'Rejected → License plate obstructed';
+        }
+        if (image.error.includes('Glare affecting')) {
+          return 'Rejected → Poor lighting/glare on plates';
+        }
+        if (image.error.includes('Image blur detected')) {
+          return 'Rejected → Image too blurry/out of focus';
+        }
+        if (image.error.includes('too dark') || image.error.includes('too bright')) {
+          return 'Rejected → Poor lighting conditions';
+        }
+        if (image.error.includes('resolution') || image.error.includes('pixelated')) {
+          return 'Rejected → Image resolution too low';
+        }
+        if (image.error.includes('garland') || image.error.includes('decoration') || image.error.includes('sticker')) {
+          return 'Rejected → Decorative items blocking plates';
+        }
+        
+        // Legacy rejection reasons
         if (image.error.includes('Image quality too poor')) {
-          return 'Rejected → Image quality too poor for analysis';
+          return 'Rejected → Image quality insufficient';
         }
         if (image.error.includes('not traffic-related')) {
-          return 'Rejected → Not a traffic-related image';
+          return 'Rejected → Not a traffic scene';
         }
         if (image.error.includes('No vehicles detected')) {
-          return 'Rejected → No vehicles detected in image';
+          return 'Rejected → No vehicles visible';
         }
         if (image.error.includes('No license plate detected')) {
-          return 'Rejected → No license plate detected';
+          return 'Rejected → No readable license plates';
         }
-        return 'Rejected → ' + image.error;
+        
+        // Truncate very long error messages for UI display
+        const maxLength = 60;
+        const shortError = image.error.length > maxLength 
+          ? image.error.substring(0, maxLength) + '...' 
+          : image.error;
+        
+        return 'Rejected → ' + shortError;
       }
       
       const violationCount = image.violationCount || 0;

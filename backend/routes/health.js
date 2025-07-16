@@ -61,21 +61,57 @@ router.get('/health', (req, res) => {
       test_plate_detection: '/api/test-plate-detection'
     },
     workflow_steps: {
-      step_1: 'Image Quality Assessment (categorize as Good/Needs Review/Blurry)',
+      step_1: 'Enhanced Image Quality Assessment (strict multi-layer validation with obstruction detection)',
       step_2: 'License Plate OCR (Telangana-specific)',
       step_3: 'RTA Details Lookup (TSeChallan API + sample fallback)',
       step_4: 'AI Vehicle Analysis (detailed vehicle characteristics)',
       step_5: 'Vehicle Details Comparison (AI vs RTA intelligent matching)',
       step_6: 'AI Violation Detection (No Helmet, Cell Phone Driving, Triple Riding, Wrong Side Driving)'
     },
-    implementation_status: {
-      step_1_quality_assessment: '✅ IMPLEMENTED',
-      step_2_license_plate_ocr: '✅ IMPLEMENTED', 
-      step_3_rta_lookup: '✅ IMPLEMENTED',
-      step_4_vehicle_analysis: '✅ IMPLEMENTED',
-      step_5_details_comparison: '✅ IMPLEMENTED',
-      step_6_violation_detection: '✅ IMPLEMENTED'
-    },
+          implementation_status: {
+        step_1_enhanced_quality_assessment: '✅ IMPLEMENTED',
+        step_2_license_plate_ocr: '✅ IMPLEMENTED', 
+        step_3_rta_lookup: '✅ IMPLEMENTED',
+        step_4_vehicle_analysis: '✅ IMPLEMENTED',
+        step_5_details_comparison: '✅ IMPLEMENTED',
+        step_6_violation_detection: '✅ IMPLEMENTED'
+      },
+      enhanced_quality_assessment: {
+        detection_method: 'Multi-layer AI analysis with strict validation',
+        obstruction_detection: [
+          'Flower garlands and marigold decorations',
+          'Religious symbols and decorative stickers', 
+          'Mud, dirt, and grime covering plates',
+          'Damaged or bent license plates',
+          'Aftermarket plate covers and frames',
+          'Dark tinting or spray paint',
+          'Partial covering by vehicle parts'
+        ],
+        quality_criteria: [
+          'License plate visibility and readability',
+          'Image sharpness and clarity assessment',
+          'Lighting condition evaluation',
+          'Technical quality validation',
+          'Traffic context verification'
+        ],
+        strict_rejection_rules: [
+          'Any obstruction visible on license plates',
+          'Plates not clearly readable due to lighting',
+          'Image lacks crystal clear sharpness',
+          'Extreme lighting conditions (too dark/bright)',
+          'Motion blur or camera shake',
+          'Low resolution or heavy compression',
+          'Not a proper traffic scene',
+          'Vehicles too distant for analysis'
+        ],
+        acceptance_criteria: [
+          'License plates completely clear and unobstructed',
+          'Image sharp with excellent clarity',
+          'Good lighting with no extreme conditions',
+          'Clear traffic scene with analyzable vehicles',
+          'High resolution with no technical issues'
+        ]
+      },
     data_sources: {
       tsechallan_api: {
         configured: !!(TSECHALLAN_CONFIG.vendorCode && TSECHALLAN_CONFIG.vendorKey),
