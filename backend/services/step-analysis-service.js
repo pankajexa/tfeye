@@ -101,7 +101,7 @@ Look carefully for these common obstructions on license plates:
 **RESPONSE FORMAT:**
 {
   "status": "QUALIFIED|REJECTED",
-  "primary_rejection_reason": "specific_reason_if_rejected",
+  "primary_rejection_reason": "License plate obstructed|Image Low Quality",
   "detailed_analysis": {
     "license_plate_visibility": {
       "score": 0.0-1.0,
@@ -144,12 +144,15 @@ Look carefully for these common obstructions on license plates:
   }
 }
 
+**REJECTION REASON RULES:**
+- Use "License plate obstructed" if: plates blocked, covered, damaged, tinted, or not readable due to obstructions
+- Use "Image Low Quality" for: blur, poor lighting, low resolution, compression artifacts, wrong scene type
+
 **REMEMBER:**
 - BE EXTREMELY STRICT - reject anything questionable
 - Focus on license plate clarity above all else
-- Any obstruction = immediate rejection
-- Poor lighting = immediate rejection
-- Any blur or unclear details = immediate rejection
+- Any obstruction = "License plate obstructed"
+- Poor lighting/blur = "Image Low Quality"
 - When in doubt, ALWAYS REJECT
 `;
 
