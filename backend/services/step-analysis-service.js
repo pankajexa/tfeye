@@ -12,86 +12,88 @@ class StepAnalysisService {
   }
 
   // =============================================================================
-  // STEP 1: ENHANCED IMAGE QUALITY & READINESS CHECK
-  // Purpose: Stringent multi-layer quality assessment with specific obstruction detection
+  // STEP 1: LICENSE PLATE FOCUSED QUALITY ASSESSMENT
+  // Purpose: Practical assessment focused on license plate readability for traffic enforcement
   // =============================================================================
   
   async step1_checkImageQuality(imageBuffer) {
-    console.log('🔍 STEP 1: Enhanced Image Quality & Readiness Check...');
+    console.log('🔍 STEP 1: License Plate Focused Quality Assessment...');
     
     try {
       const prompt = `
-You are an EXTREMELY STRICT traffic image quality inspector and timestamp extractor. Your job is to RIGOROUSLY assess image quality with ZERO TOLERANCE for poor quality images.
+You are a practical traffic image quality assessor focused on LICENSE PLATE READABILITY for violation analysis. Your primary goal is to determine if license plates in the image are readable enough for traffic enforcement.
 
-**CRITICAL: BE VERY STRICT - When in doubt, REJECT the image. It's better to reject a borderline image than allow poor quality to proceed.**
+**KEY PRINCIPLE: FOCUS ON LICENSE PLATE QUALITY, NOT OVERALL IMAGE PERFECTION**
 
 **PRIMARY OBJECTIVES:**
-1. **STRICT Quality Assessment**: Determine if image meets HIGH STANDARDS for traffic violation analysis
-2. **Obstruction Detection**: Specifically look for items blocking license plates
-3. **Technical Quality Check**: Assess sharpness, lighting, resolution
+1. **License Plate Assessment**: Can license plates be read for traffic violation processing?
+2. **Obstruction Detection**: Are plates blocked by decorations, dirt, or damage?
+3. **Traffic Context Validation**: Is this a legitimate traffic scene?
 4. **Timestamp Extraction**: Find embedded date/time information
 
-**ULTRA-STRICT QUALITY CRITERIA:**
+**LICENSE PLATE FOCUSED CRITERIA:**
 
-**1. LICENSE PLATE VISIBILITY (MOST CRITICAL):**
-- Are license plates CLEARLY READABLE without any obstructions?
-- REJECT if plates are blocked by: garlands, flowers, stickers, decorative items, mud, dirt
-- REJECT if plates are heavily tinted, dark, or modified
-- REJECT if plates are damaged, bent, or partially hidden
-- REJECT if text on plates is blurry, pixelated, or unclear
-- REJECT if plates are at extreme angles making reading difficult
+**1. LICENSE PLATE READABILITY (PRIMARY CONCERN):**
+✅ **ACCEPT if license plates are:**
+- Text characters are clearly distinguishable (even if not perfect)
+- Numbers and letters can be read with reasonable confidence
+- Plate is visible and not completely obscured
+- Characters are recognizable despite minor blur or compression
 
-**2. IMAGE SHARPNESS & CLARITY:**
-- REJECT if image is even slightly blurry or out of focus
-- REJECT if vehicle details are not crystal clear
-- REJECT if there's motion blur affecting vehicles
-- REJECT if image is heavily pixelated or low resolution
+❌ **REJECT if license plates are:**
+- Completely blocked by garlands, decorations, stickers, mud
+- Text is completely unreadable due to heavy blur or damage
+- Plate is missing, heavily tinted black, or intentionally obscured
+- Characters are so distorted that OCR would fail entirely
 
-**3. LIGHTING CONDITIONS:**
-- REJECT if image is too dark (night images with poor lighting)
-- REJECT if image is overexposed (too bright, washed out)
-- REJECT if there are heavy shadows obscuring vehicles
-- REJECT if glare makes license plates unreadable
+**2. PRACTICAL IMAGE QUALITY (SECONDARY):**
+✅ **ACCEPT despite:**
+- Some motion blur (if plates are still readable)
+- Moderate compression artifacts
+- Mixed lighting conditions (day/night/shadows)
+- Some noise or grain in the image
+- Non-perfect focus (if plates are distinguishable)
 
-**4. TRAFFIC CONTEXT:**
-- REJECT if no vehicles are visible
-- REJECT if not a traffic scene (indoor, non-road images)
-- REJECT if vehicles are too far away to analyze properly
-- REJECT if image shows only partial vehicles
+❌ **REJECT only if:**
+- Image is extremely dark with no visible detail
+- Severe overexposure making everything white/washed out
+- Extreme blur making nothing recognizable
+- Heavy corruption or technical artifacts
 
-**5. TECHNICAL QUALITY:**
-- REJECT if image appears heavily compressed with artifacts
-- REJECT if image resolution seems too low for analysis
-- REJECT if colors are heavily distorted
+**3. TRAFFIC CONTEXT (BASIC VALIDATION):**
+✅ **ACCEPT if:**
+- Image shows vehicles in traffic environment
+- Scene appears to be legitimate traffic/road context
+- Vehicles are reasonably visible (not microscopic)
+
+❌ **REJECT only if:**
+- Not a traffic scene (indoor, non-vehicle images)
+- No vehicles visible at all
+- Completely irrelevant content
+
+**PRACTICAL DECISION FRAMEWORK:**
+🎯 **PRIMARY QUESTION**: "Can a human read the license plate numbers?"
+📋 **SECONDARY QUESTION**: "Is this a valid traffic scene?"
+
+**BALANCED APPROACH:**
+- Be LENIENT on overall image quality issues
+- Be FOCUSED on license plate readability
+- ACCEPT borderline cases where plates are readable
+- REJECT only when plates are truly unreadable or completely obstructed
 
 **SPECIFIC OBSTRUCTION DETECTION:**
-Look carefully for these common obstructions on license plates:
-- Flower garlands or marigold decorations
-- Religious symbols or decorative stickers
-- Mud, dirt, or grime covering plates
-- Damaged or bent license plates
-- Aftermarket plate covers or frames
-- Dark tinting or spray paint
-- Partial covering by vehicle parts or accessories
+Look for these SERIOUS obstructions that make plates unreadable:
+- Complete coverage by garlands, flowers, decorations
+- Heavy mud/dirt completely covering text
+- Intentional tampering (spray paint, tape)
+- Severe physical damage making text unrecognizable
+- Complete tinting that obscures all text
 
-**STRICT DECISION RULES - REJECT IF ANY OF THESE:**
-- Any obstruction visible on license plates (even small)
-- Plates not clearly readable due to lighting
-- Image lacks crystal clear sharpness
-- Extreme lighting conditions (too dark/bright)
-- Motion blur or camera shake
-- Low resolution or heavy compression
-- Not a proper traffic scene
-- Vehicles too distant for proper analysis
-- Any doubt about image quality
-
-**ACCEPTANCE CRITERIA - ACCEPT ONLY IF ALL TRUE:**
-- License plates are COMPLETELY CLEAR and unobstructed
-- Image is SHARP with excellent clarity
-- Good lighting with no extreme conditions
-- Clear traffic scene with vehicles
-- High enough resolution for detailed analysis
-- No technical quality issues
+**QUALITY-FOCUSED ACCEPTANCE:**
+Accept images where you can answer "YES" to:
+- "Can I make out most characters on the license plate?"
+- "Would OCR have a reasonable chance of reading this plate?"
+- "Is this clearly a traffic/vehicle scene?"
 
 **TIMESTAMP EXTRACTION (Secondary):**
 - Look for embedded timestamp/date in corners
@@ -145,15 +147,15 @@ Look carefully for these common obstructions on license plates:
 }
 
 **REJECTION REASON RULES:**
-- Use "License plate obstructed" if: plates blocked, covered, damaged, tinted, or not readable due to obstructions
-- Use "Image Low Quality" for: blur, poor lighting, low resolution, compression artifacts, wrong scene type
+- Use "License plate obstructed" if: plates are completely unreadable due to heavy obstructions, damage, or tampering
+- Use "Image Low Quality" for: extreme technical issues that make any analysis impossible (severe corruption, completely dark, etc.)
 
-**REMEMBER:**
-- BE EXTREMELY STRICT - reject anything questionable
-- Focus on license plate clarity above all else
-- Any obstruction = "License plate obstructed"
-- Poor lighting/blur = "Image Low Quality"
-- When in doubt, ALWAYS REJECT
+**BALANCED DECISION APPROACH:**
+- PRIORITIZE license plate readability over perfect image quality
+- ACCEPT images where plates can be reasonably read despite minor issues
+- FOCUS on practical traffic enforcement needs
+- REJECT only when license plates are truly unreadable or scene is invalid
+- When plates are borderline readable, LEAN TOWARDS ACCEPTANCE for manual review
 `;
 
       const imagePart = {
@@ -167,7 +169,7 @@ Look carefully for these common obstructions on license plates:
       const response = await result.response;
       const text = response.text();
 
-      console.log('📄 Step 1 ENHANCED raw response:', text);
+      console.log('📄 Step 1 License Plate Focused raw response:', text);
 
       // Parse JSON response
       const jsonMatch = text.match(/\{[\s\S]*\}/);
@@ -178,7 +180,7 @@ Look carefully for these common obstructions on license plates:
       const assessment = JSON.parse(jsonMatch[0]);
       
       if (assessment.status === 'QUALIFIED') {
-        console.log('✅ Step 1 ENHANCED: Image QUALIFIED for analysis');
+        console.log('✅ Step 1: Image QUALIFIED - License plates readable for analysis');
         console.log('  📊 Overall quality score:', assessment.overall_quality_score);
         console.log('  🎯 License plate readability:', assessment.detailed_analysis?.license_plate_visibility?.readability);
         console.log('  💡 Image sharpness:', assessment.detailed_analysis?.image_sharpness?.clarity_level);
@@ -186,7 +188,7 @@ Look carefully for these common obstructions on license plates:
         return {
           success: true,
           step: 1,
-          step_name: 'Enhanced Image Quality & Readiness Check',
+          step_name: 'License Plate Focused Quality Assessment',
           data: {
             status: 'QUALIFIED',
             overall_quality_score: assessment.overall_quality_score,
@@ -204,7 +206,7 @@ Look carefully for these common obstructions on license plates:
           }
         };
       } else {
-        console.log('❌ Step 1 ENHANCED: Image REJECTED -', assessment.primary_rejection_reason);
+        console.log('❌ Step 1: Image REJECTED -', assessment.primary_rejection_reason);
         console.log('  📊 Overall quality score:', assessment.overall_quality_score);
         console.log('  🚫 Rejection details:', assessment.detailed_analysis);
         
@@ -216,7 +218,7 @@ Look carefully for these common obstructions on license plates:
         return {
           success: false,
           step: 1,
-          step_name: 'Enhanced Image Quality & Readiness Check',
+          step_name: 'License Plate Focused Quality Assessment',
           error: `Image rejected: ${assessment.primary_rejection_reason}`,
           errorCode: 'ENHANCED_IMAGE_QUALITY_REJECTED',
           data: {
@@ -238,13 +240,13 @@ Look carefully for these common obstructions on license plates:
       }
 
     } catch (error) {
-      console.error('💥 Step 1 ENHANCED error:', error);
+      console.error('💥 Step 1 License Plate Focused Assessment error:', error);
       return {
         success: false,
         step: 1,
-        step_name: 'Enhanced Image Quality & Readiness Check',
+        step_name: 'License Plate Focused Quality Assessment',
         error: error.message || 'Failed to assess image quality',
-        errorCode: 'STEP1_ENHANCED_ASSESSMENT_FAILED'
+        errorCode: 'STEP1_QUALITY_ASSESSMENT_FAILED'
       };
     }
   }
