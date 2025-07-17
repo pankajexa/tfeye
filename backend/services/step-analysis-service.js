@@ -12,18 +12,18 @@ class StepAnalysisService {
   }
 
   // =============================================================================
-  // STEP 1: LICENSE PLATE FOCUSED QUALITY ASSESSMENT
-  // Purpose: Practical assessment focused on license plate readability for traffic enforcement
+  // STEP 1: BALANCED LICENSE PLATE QUALITY ASSESSMENT
+  // Purpose: Balanced assessment ensuring all license plate characters are readable while accepting minor image quality issues
   // =============================================================================
   
   async step1_checkImageQuality(imageBuffer) {
-    console.log('🔍 STEP 1: License Plate Focused Quality Assessment...');
+    console.log('🔍 STEP 1: Balanced License Plate Quality Assessment...');
     
     try {
       const prompt = `
-You are a practical traffic image quality assessor focused on LICENSE PLATE READABILITY for violation analysis. Your primary goal is to determine if license plates in the image are readable enough for traffic enforcement.
+You are a traffic image quality assessor focused on LICENSE PLATE READABILITY for violation analysis. Your goal is to find the RIGHT BALANCE - accepting images where license plates are readable while rejecting those with significant obstructions or quality issues.
 
-**KEY PRINCIPLE: FOCUS ON LICENSE PLATE QUALITY, NOT OVERALL IMAGE PERFECTION**
+**KEY PRINCIPLE: BALANCED ASSESSMENT - LICENSE PLATE CHARACTERS MUST BE CLEARLY READABLE**
 
 **PRIMARY OBJECTIVES:**
 1. **License Plate Assessment**: Can license plates be read for traffic violation processing?
@@ -34,31 +34,36 @@ You are a practical traffic image quality assessor focused on LICENSE PLATE READ
 **LICENSE PLATE FOCUSED CRITERIA:**
 
 **1. LICENSE PLATE READABILITY (PRIMARY CONCERN):**
-✅ **ACCEPT if license plates are:**
-- Text characters are clearly distinguishable (even if not perfect)
-- Numbers and letters can be read with reasonable confidence
-- Plate is visible and not completely obscured
-- Characters are recognizable despite minor blur or compression
 
-❌ **REJECT if license plates are:**
-- Completely blocked by garlands, decorations, stickers, mud
-- Text is completely unreadable due to heavy blur or damage
-- Plate is missing, heavily tinted black, or intentionally obscured
-- Characters are so distorted that OCR would fail entirely
+✅ **ACCEPT if ALL license plate characters are:**
+- Individual characters/numbers are clearly distinguishable
+- All characters can be read by a human with reasonable confidence
+- Plate text is visible despite minor blur, compression, or lighting
+- No characters are obstructed or missing
+- OCR would have a good chance of reading the complete number
 
-**2. PRACTICAL IMAGE QUALITY (SECONDARY):**
+❌ **REJECT if ANY license plate characters are:**
+- Obstructed by garlands, decorations, stickers, mud, or damage
+- Pixelated, blurred, or distorted beyond human readability
+- Missing, covered, or intentionally obscured (even partially)
+- Too dark, bright, or unclear to distinguish individual characters
+- Any single character is unreadable (even if others are clear)
+
+**2. BALANCED IMAGE QUALITY (SECONDARY):**
+
 ✅ **ACCEPT despite:**
-- Some motion blur (if plates are still readable)
-- Moderate compression artifacts
-- Mixed lighting conditions (day/night/shadows)
-- Some noise or grain in the image
-- Non-perfect focus (if plates are distinguishable)
+- Minor motion blur (if license plate characters remain readable)
+- Some compression artifacts that don't affect plate text
+- Mixed lighting conditions (if plates are still distinguishable)
+- Some image noise or grain (if plate text is clear)
+- Slight out-of-focus (if plate characters are recognizable)
 
-❌ **REJECT only if:**
-- Image is extremely dark with no visible detail
-- Severe overexposure making everything white/washed out
-- Extreme blur making nothing recognizable
-- Heavy corruption or technical artifacts
+❌ **REJECT if:**
+- License plate area is too blurry for character recognition
+- Pixelation makes plate characters unreadable by humans
+- Lighting is so poor that plate text is indistinguishable
+- Image corruption affects license plate readability
+- Overall quality prevents reliable plate character identification
 
 **3. TRAFFIC CONTEXT (BASIC VALIDATION):**
 ✅ **ACCEPT if:**
@@ -71,29 +76,37 @@ You are a practical traffic image quality assessor focused on LICENSE PLATE READ
 - No vehicles visible at all
 - Completely irrelevant content
 
-**PRACTICAL DECISION FRAMEWORK:**
-🎯 **PRIMARY QUESTION**: "Can a human read the license plate numbers?"
-📋 **SECONDARY QUESTION**: "Is this a valid traffic scene?"
+**BALANCED DECISION FRAMEWORK:**
+🎯 **PRIMARY QUESTION**: "Can a human clearly read ALL characters on the license plate?"
+📋 **SECONDARY QUESTION**: "Are ANY characters obstructed or unreadable?"
+🔍 **FINAL CHECK**: "Is this a valid traffic scene?"
 
-**BALANCED APPROACH:**
-- Be LENIENT on overall image quality issues
-- Be FOCUSED on license plate readability
-- ACCEPT borderline cases where plates are readable
-- REJECT only when plates are truly unreadable or completely obstructed
+**RIGHT BALANCE APPROACH:**
+- ACCEPT: Minor image quality issues if ALL plate characters are readable
+- REJECT: ANY obstruction or distortion that makes characters unreadable
+- CRITICAL: Even one unreadable character = REJECT
+- FOCUS: Character-level readability, not overall image perfection
 
-**SPECIFIC OBSTRUCTION DETECTION:**
-Look for these SERIOUS obstructions that make plates unreadable:
-- Complete coverage by garlands, flowers, decorations
-- Heavy mud/dirt completely covering text
-- Intentional tampering (spray paint, tape)
-- Severe physical damage making text unrecognizable
-- Complete tinting that obscures all text
+**CHARACTER-LEVEL OBSTRUCTION DETECTION:**
+REJECT if ANY characters are affected by:
+- Partial coverage by garlands, flowers, decorations, stickers
+- Mud, dirt, or grime covering individual characters
+- Physical damage affecting any character readability
+- Shadows, glare, or lighting making characters unclear
+- Wear, fading, or damage making characters indistinguishable
+- ANY obstruction that prevents reading complete license number
 
-**QUALITY-FOCUSED ACCEPTANCE:**
-Accept images where you can answer "YES" to:
-- "Can I make out most characters on the license plate?"
-- "Would OCR have a reasonable chance of reading this plate?"
+**BALANCED QUALITY ASSESSMENT:**
+✅ **ACCEPT** images where you can answer "YES" to ALL:
+- "Can I clearly read EVERY character on the license plate?"
+- "Are ALL characters unobstructed and distinguishable?"
+- "Would OCR reliably read the complete plate number?"
 - "Is this clearly a traffic/vehicle scene?"
+
+❌ **REJECT** if you answer "YES" to ANY:
+- "Are any characters partially or completely obstructed?"
+- "Are any characters too blurry/pixelated to identify?"
+- "Would I struggle to read any part of the license number?"
 
 **TIMESTAMP EXTRACTION (Secondary):**
 - Look for embedded timestamp/date in corners
@@ -147,15 +160,15 @@ Accept images where you can answer "YES" to:
 }
 
 **REJECTION REASON RULES:**
-- Use "License plate obstructed" if: plates are completely unreadable due to heavy obstructions, damage, or tampering
-- Use "Image Low Quality" for: extreme technical issues that make any analysis impossible (severe corruption, completely dark, etc.)
+- Use "License plate obstructed" if: ANY characters are blocked, covered, or unreadable due to obstructions
+- Use "Image Low Quality" if: plate characters are unreadable due to blur, pixelation, lighting, or technical issues
 
 **BALANCED DECISION APPROACH:**
-- PRIORITIZE license plate readability over perfect image quality
-- ACCEPT images where plates can be reasonably read despite minor issues
-- FOCUS on practical traffic enforcement needs
-- REJECT only when license plates are truly unreadable or scene is invalid
-- When plates are borderline readable, LEAN TOWARDS ACCEPTANCE for manual review
+- STANDARD: All license plate characters must be clearly readable
+- ACCEPT: Minor image quality issues that don't affect character recognition
+- REJECT: Any obstruction or quality issue affecting character readability
+- CRITICAL: Complete license number must be readable for traffic enforcement
+- PRINCIPLE: Better to manual review borderline cases than miss obstructed plates
 `;
 
       const imagePart = {
@@ -180,7 +193,7 @@ Accept images where you can answer "YES" to:
       const assessment = JSON.parse(jsonMatch[0]);
       
       if (assessment.status === 'QUALIFIED') {
-        console.log('✅ Step 1: Image QUALIFIED - License plates readable for analysis');
+        console.log('✅ Step 1: Image QUALIFIED - All license plate characters readable');
         console.log('  📊 Overall quality score:', assessment.overall_quality_score);
         console.log('  🎯 License plate readability:', assessment.detailed_analysis?.license_plate_visibility?.readability);
         console.log('  💡 Image sharpness:', assessment.detailed_analysis?.image_sharpness?.clarity_level);
@@ -188,7 +201,7 @@ Accept images where you can answer "YES" to:
         return {
           success: true,
           step: 1,
-          step_name: 'License Plate Focused Quality Assessment',
+          step_name: 'Balanced License Plate Quality Assessment',
           data: {
             status: 'QUALIFIED',
             overall_quality_score: assessment.overall_quality_score,
@@ -218,7 +231,7 @@ Accept images where you can answer "YES" to:
         return {
           success: false,
           step: 1,
-          step_name: 'License Plate Focused Quality Assessment',
+          step_name: 'Balanced License Plate Quality Assessment',
           error: `Image rejected: ${assessment.primary_rejection_reason}`,
           errorCode: 'ENHANCED_IMAGE_QUALITY_REJECTED',
           data: {
@@ -240,11 +253,11 @@ Accept images where you can answer "YES" to:
       }
 
     } catch (error) {
-      console.error('💥 Step 1 License Plate Focused Assessment error:', error);
+      console.error('💥 Step 1 Balanced Quality Assessment error:', error);
       return {
         success: false,
         step: 1,
-        step_name: 'License Plate Focused Quality Assessment',
+        step_name: 'Balanced License Plate Quality Assessment',
         error: error.message || 'Failed to assess image quality',
         errorCode: 'STEP1_QUALITY_ASSESSMENT_FAILED'
       };
