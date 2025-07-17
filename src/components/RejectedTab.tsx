@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { XCircle, AlertTriangle, Database, Car, Eye, X } from 'lucide-react';
+import { XCircle, AlertTriangle, Database, Car, Eye, X, RotateCcw, CheckCircle } from 'lucide-react';
 import { RejectedSubTab } from '../types';
 import { useChallanContext } from '../context/ChallanContext';
 import ImageZoom from './ImageZoom';
@@ -9,9 +9,10 @@ interface RejectedTabProps {
 }
 
 const RejectedTab: React.FC<RejectedTabProps> = ({ activeSubTab }) => {
-  const { getChallansByStatus } = useChallanContext();
+  const { getChallansByStatus, updateChallanStatus } = useChallanContext();
   const allRejectedChallans = getChallansByStatus('rejected');
   const [selectedImage, setSelectedImage] = useState<{ src: string; alt: string; plateNumber?: string } | null>(null);
+  const [manualReviewModal, setManualReviewModal] = useState<{ isOpen: boolean; challan: any } | null>(null);
 
   // Filter rejected challans based on sub-tab
   const getFilteredChallans = () => {
@@ -37,6 +38,27 @@ const RejectedTab: React.FC<RejectedTabProps> = ({ activeSubTab }) => {
   };
 
   const filteredChallans = getFilteredChallans();
+
+  // Handle manual override for system-rejected images
+  const handleManualOverride = (challan: any) => {
+    setManualReviewModal({ isOpen: true, challan });
+  };
+
+  const confirmManualOverride = () => {
+    if (manualReviewModal?.challan) {
+      // Move the challan to pending-review status for manual analysis
+      updateChallanStatus(manualReviewModal.challan.id, 'pending-review');
+      setManualReviewModal(null);
+      
+      console.log('Manual override confirmed for challan:', manualReviewModal.challan.id);
+      console.log('Challan moved to pending-review for manual analysis');
+    }
+  };
+
+  // Check if a challan is system-rejected (can be manually overridden)
+  const isSystemRejected = (challan: any) => {
+    return !challan.reviewedBy || challan.reviewedBy === 'System';
+  };
 
   const getEmptyStateContent = () => {
     switch (activeSubTab) {
@@ -126,6 +148,12 @@ const RejectedTab: React.FC<RejectedTabProps> = ({ activeSubTab }) => {
                           <XCircle className="w-3 h-3 mr-1" />
                           Rejected
                         </span>
+                        {isSystemRejected(challan) && (
+                          <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                            <RotateCcw className="w-3 h-3 mr-1" />
+                            Manual Review Available
+                          </span>
+                        )}
                       </div>
                       <div className="text-sm text-gray-500">
                         {challan.reviewTimestamp ? new Date(challan.reviewTimestamp).toLocaleString() : new Date(challan.timestamp).toLocaleString()}
@@ -188,8 +216,21 @@ const RejectedTab: React.FC<RejectedTabProps> = ({ activeSubTab }) => {
                       </div>
                     )}
                     
-                    <div className="mt-3 text-sm text-gray-600">
-                      <span className="font-medium">Analysis:</span> {new Date(challan.timestamp).toLocaleString()}
+                    <div className="mt-3 flex items-center justify-between">
+                      <div className="text-sm text-gray-600">
+                        <span className="font-medium">Analysis:</span> {new Date(challan.timestamp).toLocaleString()}
+                      </div>
+                      
+                      {/* Manual Override Button for System-Rejected Images */}
+                      {isSystemRejected(challan) && (
+                        <button
+                          onClick={() => handleManualOverride(challan)}
+                          className="inline-flex items-center px-3 py-1 border border-blue-300 text-sm font-medium rounded-md text-blue-700 bg-blue-50 hover:bg-blue-100 transition-colors duration-200"
+                        >
+                          <RotateCcw className="h-4 w-4 mr-1" />
+                          Manual Review
+                        </button>
+                      )}
                     </div>
                   </div>
                 </div>
@@ -214,6 +255,105 @@ const RejectedTab: React.FC<RejectedTabProps> = ({ activeSubTab }) => {
             >
               <X className="h-6 w-6" />
             </button>
+          </div>
+        </div>
+      )}
+
+      {/* Manual Review Modal */}
+      {manualReviewModal?.isOpen && (
+        <div className="fixed inset-0 z-50 bg-black bg-opacity-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-lg shadow-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between p-6 border-b border-gray-200">
+              <h2 className="text-xl font-semibold text-gray-900 flex items-center">
+                <RotateCcw className="h-6 w-6 text-blue-600 mr-2" />
+                Manual Review Override
+              </h2>
+              <button
+                onClick={() => setManualReviewModal(null)}
+                className="p-2 hover:bg-gray-100 rounded-md transition-colors duration-200"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            <div className="p-6 space-y-6">
+              <div className="bg-yellow-50 border border-yellow-200 rounded-md p-4">
+                <div className="flex">
+                  <AlertTriangle className="h-5 w-5 text-yellow-600 mt-0.5 mr-3" />
+                  <div>
+                    <h3 className="text-sm font-medium text-yellow-800">System Rejection Override</h3>
+                    <p className="mt-1 text-sm text-yellow-700">
+                      This image was automatically rejected by the AI system. You can manually override this decision if you believe the image can be analyzed.
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Image Preview */}
+              <div>
+                <h4 className="text-sm font-medium text-gray-700 mb-2">Rejected Image</h4>
+                <div className="border border-gray-200 rounded-lg p-4 bg-gray-50">
+                  <img
+                    src={manualReviewModal.challan.preview || manualReviewModal.challan.image}
+                    alt="Rejected traffic image"
+                    className="w-full max-w-md mx-auto rounded-lg object-cover"
+                  />
+                </div>
+              </div>
+
+              {/* Rejection Details */}
+              <div>
+                <h4 className="text-sm font-medium text-gray-700 mb-2">Rejection Details</h4>
+                <div className="bg-gray-50 border border-gray-200 rounded-md p-4 space-y-2">
+                  <div>
+                    <span className="text-sm font-medium text-gray-600">Challan ID:</span>
+                    <span className="text-sm text-gray-900 ml-2">{manualReviewModal.challan.id}</span>
+                  </div>
+                  <div>
+                    <span className="text-sm font-medium text-gray-600">Rejection Reason:</span>
+                    <span className="text-sm text-red-600 ml-2 font-medium">{manualReviewModal.challan.rejectionReason || 'Not specified'}</span>
+                  </div>
+                  <div>
+                    <span className="text-sm font-medium text-gray-600">Rejected At:</span>
+                    <span className="text-sm text-gray-900 ml-2">{new Date(manualReviewModal.challan.reviewTimestamp || manualReviewModal.challan.timestamp).toLocaleString()}</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Override Confirmation */}
+              <div>
+                <h4 className="text-sm font-medium text-gray-700 mb-2">Manual Override Action</h4>
+                <div className="bg-blue-50 border border-blue-200 rounded-md p-4">
+                  <div className="flex items-start">
+                    <CheckCircle className="h-5 w-5 text-blue-600 mt-0.5 mr-3" />
+                    <div>
+                                             <p className="text-sm text-blue-800">
+                         <strong>Confirm Manual Override:</strong> This will move the image to the pending review queue where it can be manually analyzed and reviewed by an operator.
+                       </p>
+                       <p className="text-xs text-blue-600 mt-1">
+                         Note: The image will bypass automatic quality checks and go directly to the manual review queue.
+                       </p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div className="flex justify-end space-x-3 p-6 border-t border-gray-200">
+              <button
+                onClick={() => setManualReviewModal(null)}
+                className="px-4 py-2 border border-gray-300 text-gray-700 rounded-md hover:bg-gray-50 transition-colors duration-200"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={confirmManualOverride}
+                className="inline-flex items-center px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors duration-200"
+              >
+                <RotateCcw className="mr-2 h-4 w-4" />
+                Confirm Manual Review
+              </button>
+            </div>
           </div>
         </div>
       )}
