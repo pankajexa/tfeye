@@ -381,7 +381,7 @@ router.post('/api/fetch-rta-details', async (req, res) => {
     }
 
     console.log('📋 Looking up RTA details for:', license_plate);
-    const rtaResult = await stepAnalysisService.fetchRTADetails(license_plate);
+    const rtaResult = await stepAnalysisService.step4_fetchRTADetails(license_plate);
     
     console.log('✅ RTA details lookup completed');
     res.json(rtaResult);

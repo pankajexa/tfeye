@@ -1157,6 +1157,235 @@ ${JSON.stringify(rtaData, null, 2)}
     console.log('🔄 Legacy detectViolations - redirecting to Step 2...');
     return await this.step2_findViolatingVehicle(imageBuffer);
   }
+
+  // Vehicle comparison method for license plate edit functionality
+  async compareVehicleDetails(aiAnalysis, rtaData) {
+    console.log('🔍 Comparing AI analysis with RTA data for license plate edit...');
+    console.log('  📋 AI Analysis:', JSON.stringify(aiAnalysis, null, 2));
+    console.log('  📋 RTA Data:', JSON.stringify(rtaData, null, 2));
+    
+    try {
+      // Create a simple comparison based on available data
+      const comparison = {
+        overall_verdict: 'PARTIAL_MATCH', // Default to partial match for manual edits
+        confidence_score: 0.8,
+        parameter_analysis: {},
+        explanation: 'Comparison performed with manually corrected license plate',
+        verification_recommendation: 'REVIEW'
+      };
+
+      // Compare vehicle type if available
+      if (aiAnalysis.vehicle_type && rtaData.vehicleClass) {
+        const vehicleTypeMatch = this.compareField(aiAnalysis.vehicle_type, rtaData.vehicleClass);
+        comparison.parameter_analysis.vehicle_type = {
+          ai: aiAnalysis.vehicle_type,
+          rta: rtaData.vehicleClass,
+          match: vehicleTypeMatch
+        };
+      }
+
+      // Compare make if available  
+      if (aiAnalysis.make && rtaData.make) {
+        const makeMatch = this.compareField(aiAnalysis.make, rtaData.make);
+        comparison.parameter_analysis.make_brand = {
+          ai: aiAnalysis.make,
+          rta: rtaData.make,
+          match: makeMatch
+        };
+      }
+
+      // Compare model if available
+      if (aiAnalysis.model && rtaData.model) {
+        const modelMatch = this.compareField(aiAnalysis.model, rtaData.model);
+        comparison.parameter_analysis.model = {
+          ai: aiAnalysis.model,
+          rta: rtaData.model,
+          match: modelMatch
+        };
+      }
+
+      // Compare color if available
+      if (aiAnalysis.color && rtaData.color) {
+        const colorMatch = this.compareField(aiAnalysis.color, rtaData.color);
+        comparison.parameter_analysis.color = {
+          ai: aiAnalysis.color,
+          rta: rtaData.color,
+          match: colorMatch
+        };
+      }
+
+      // Calculate overall verdict based on matches
+      const matches = Object.values(comparison.parameter_analysis);
+      const totalMatches = matches.filter(m => m.match).length;
+      const totalComparisons = matches.length;
+      
+      if (totalComparisons > 0) {
+        const matchRatio = totalMatches / totalComparisons;
+        if (matchRatio >= 0.8) {
+          comparison.overall_verdict = 'MATCH';
+          comparison.verification_recommendation = 'APPROVE';
+        } else if (matchRatio >= 0.5) {
+          comparison.overall_verdict = 'PARTIAL_MATCH';
+          comparison.verification_recommendation = 'REVIEW';
+        } else {
+          comparison.overall_verdict = 'MISMATCH';
+          comparison.verification_recommendation = 'REJECT';
+        }
+        comparison.confidence_score = matchRatio;
+      }
+
+      console.log('✅ Vehicle comparison completed:', comparison.overall_verdict);
+      
+      return {
+        success: true,
+        step: 5,
+        step_name: 'Vehicle Details Comparison',
+        data: {
+          status: 'COMPARISON_COMPLETE',
+          comparison_result: comparison,
+          ai_analysis_used: aiAnalysis,
+          rta_data_used: rtaData
+        }
+      };
+
+    } catch (error) {
+      console.error('💥 Vehicle comparison error:', error);
+      return {
+        success: false,
+        step: 5,
+        step_name: 'Vehicle Details Comparison',
+        error: error.message || 'Failed to compare vehicle details',
+        errorCode: 'VEHICLE_COMPARISON_FAILED'
+      };
+    }
+  }
+
+  // Helper method for field comparison
+  compareField(aiValue, rtaValue) {
+    if (!aiValue || !rtaValue) return false;
+    
+    const normalizedAI = aiValue.toString().toLowerCase().trim();
+    const normalizedRTA = rtaValue.toString().toLowerCase().trim();
+    
+    // Exact match
+    if (normalizedAI === normalizedRTA) return true;
+    
+    // Partial match (contains)
+    if (normalizedAI.includes(normalizedRTA) || normalizedRTA.includes(normalizedAI)) return true;
+    
+    // Color-specific matching
+    if (this.isColorMatch(normalizedAI, normalizedRTA)) return true;
+    
+    return false;
+  }
+
+  // Helper method for color matching
+  isColorMatch(color1, color2) {
+    const colorSynonyms = {
+      'red': ['red', 'crimson', 'scarlet'],
+      'blue': ['blue', 'navy', 'royal blue'],
+      'black': ['black', 'dark'],
+      'white': ['white', 'pearl white'],
+      'silver': ['silver', 'grey', 'gray', 'metallic'],
+      'yellow': ['yellow', 'golden'],
+      'green': ['green', 'olive']
+    };
+
+    for (const [baseColor, synonyms] of Object.entries(colorSynonyms)) {
+      if (synonyms.includes(color1) && synonyms.includes(color2)) {
+        return true;
+      }
+    }
+    
+    return false;
+  }
+
+  // Vehicle analysis method for license plate edit functionality
+  async analyzeVehicleDetails(imageBuffer, qualityCategory = 'GOOD') {
+    console.log('🚗 Analyzing vehicle details for license plate edit...');
+    console.log('  📋 Quality category:', qualityCategory);
+    
+    try {
+      const prompt = `
+You are a vehicle analysis expert. Analyze the vehicles in this traffic image and provide detailed information about the most prominent vehicle.
+
+**ANALYSIS OBJECTIVES:**
+1. Identify the most prominent/closest vehicle
+2. Extract vehicle specifications (type, make, model, color)
+3. Count occupants if visible
+4. Note any distinctive features
+
+**RESPONSE FORMAT:**
+{
+  "vehicle_analysis": {
+    "vehicle_type": "motorcycle|car|auto-rickshaw|truck|scooter|bus",
+    "make": "brand name if identifiable",
+    "model": "model name if identifiable", 
+    "color": "primary color of the vehicle",
+    "occupant_count": number,
+    "distinctive_features": "any notable features",
+    "analysis_confidence": 0.85,
+    "visibility": "excellent|good|fair|poor"
+  },
+  "analysis_notes": "Additional observations about the vehicle"
+}
+
+**INSTRUCTIONS:**
+- Focus on the most prominent vehicle in the image
+- Be specific about make/model if clearly visible
+- Use "Unknown" for fields that cannot be determined
+- Provide realistic confidence scores
+`;
+
+      const imagePart = {
+        inlineData: {
+          data: imageBuffer.toString('base64'),
+          mimeType: 'image/jpeg'
+        }
+      };
+
+      const result = await this.model.generateContent([prompt, imagePart]);
+      const response = await result.response;
+      const text = response.text();
+
+      console.log('📄 Vehicle analysis raw response:', text);
+
+      // Parse JSON response
+      const jsonMatch = text.match(/\{[\s\S]*\}/);
+      if (!jsonMatch) {
+        throw new Error('No valid JSON found in response');
+      }
+
+      const analysis = JSON.parse(jsonMatch[0]);
+      
+      console.log('✅ Vehicle analysis completed successfully');
+      console.log('  🚗 Vehicle type:', analysis.vehicle_analysis?.vehicle_type);
+      console.log('  🎨 Color:', analysis.vehicle_analysis?.color);
+      console.log('  🏭 Make:', analysis.vehicle_analysis?.make);
+      
+      return {
+        success: true,
+        step: 4,
+        step_name: 'AI Vehicle Analysis',
+        data: {
+          status: 'ANALYSIS_COMPLETE',
+          vehicle_analysis: analysis.vehicle_analysis,
+          analysis_notes: analysis.analysis_notes,
+          quality_category: qualityCategory
+        }
+      };
+
+    } catch (error) {
+      console.error('💥 Vehicle analysis error:', error);
+      return {
+        success: false,
+        step: 4,
+        step_name: 'AI Vehicle Analysis',
+        error: error.message || 'Failed to analyze vehicle details',
+        errorCode: 'VEHICLE_ANALYSIS_FAILED'
+      };
+    }
+  }
 }
 
 module.exports = new StepAnalysisService();
