@@ -168,7 +168,7 @@ router.get('/health', (req, res) => {
         recommendations: ['APPROVE', 'REVIEW', 'REJECT']
       },
       violation_detection: {
-        detection_method: 'Gemini AI Violation Analysis (gemini-2.5-flash)',
+        detection_method: 'Gemini AI Violation Analysis (gemini-2.5-pro)',
         supported_violations: [
           'No Helmet (motorcycle/scooter riders without helmets)',
           'Cell Phone Driving (driver using phone while driving)',

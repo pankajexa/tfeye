@@ -99,7 +99,7 @@ npm start
 
 ## Model Information
 
-- **Gemini Model**: `gemini-2.5-flash` (exact same as Python notebook)
+- **Gemini Model**: `gemini-2.5-pro` (exact same as Python notebook)
 - **Prompt**: Comprehensive traffic analysis with vehicle extraction and violation detection
 - **Image Processing**: Base64 encoding with multipart upload support
 

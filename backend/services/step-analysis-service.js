@@ -8,7 +8,7 @@ const enhancedOCRService = require('./enhanced-ocr-service');
 class StepAnalysisService {
   constructor() {
     this.genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
-    this.model = this.genAI.getGenerativeModel({ model: 'gemini-2.5-flash' });
+    this.model = this.genAI.getGenerativeModel({ model: 'gemini-2.5-pro' });
   }
 
   // =============================================================================

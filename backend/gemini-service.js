@@ -385,7 +385,7 @@ async function analyzeTrafficImage(imageBuffer, rtaData = null) {
     
     // Step 2: Use Gemini for vehicle details and violation detection
     console.log('📍 Step 2: Vehicle analysis with Gemini AI...');
-    const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
+    const model = genAI.getGenerativeModel({ model: "gemini-2.5-pro" });
 
     // Convert buffer to the format Gemini expects
     const imagePart = {
