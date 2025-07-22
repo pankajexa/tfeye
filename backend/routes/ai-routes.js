@@ -396,6 +396,67 @@ router.post('/api/fetch-rta-details', async (req, res) => {
   }
 });
 
+// NEW: Re-analysis with Corrected License Plate
+router.post('/api/reanalyze-with-corrected-plate', upload.single('image'), handleMulterError, async (req, res) => {
+  try {
+    console.log('🔄 Re-analysis with corrected license plate request received');
+    
+    // Validate Gemini API key
+    if (!process.env.GEMINI_API_KEY) {
+      return res.status(400).json({
+        success: false,
+        error: 'Gemini API key not configured',
+        errorCode: 'MISSING_GEMINI_KEY'
+      });
+    }
+
+    // Validate uploaded file
+    if (!req.file) {
+      return res.status(400).json({
+        success: false,
+        error: 'No image file uploaded',
+        errorCode: 'MISSING_IMAGE'
+      });
+    }
+
+    // Validate corrected license plate
+    const { corrected_license_plate } = req.body;
+    if (!corrected_license_plate) {
+      return res.status(400).json({
+        success: false,
+        error: 'Corrected license plate is required',
+        errorCode: 'MISSING_CORRECTED_PLATE'
+      });
+    }
+
+    console.log('📋 Image details:', {
+      filename: req.file.originalname,
+      size: `${Math.round(req.file.size / 1024)}KB`,
+      mimetype: req.file.mimetype
+    });
+    console.log('📋 Corrected license plate:', corrected_license_plate);
+
+    // Execute focused re-analysis workflow
+    console.log('🔍 Starting Focused Re-analysis with Corrected License Plate...');
+    console.log('📋 Skipping Steps 1-3 (quality, violation, OCR)');
+    console.log('📋 Step 4: RTA Vehicle Details Lookup with corrected plate');
+    console.log('📋 Step 5: AI Vehicle Analysis & Comparison with corrected plate');
+    
+    const reAnalysisResult = await stepAnalysisService.runFocusedReAnalysis(req.file.buffer, corrected_license_plate);
+    
+    console.log('✅ Focused Re-analysis completed');
+    res.json(reAnalysisResult);
+
+  } catch (error) {
+    console.error('💥 Focused Re-analysis error:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message || 'Re-analysis with corrected plate failed',
+      errorCode: 'CORRECTED_PLATE_REANALYSIS_FAILED'
+    });
+  }
+});
+
 // Individual Step: Image Quality Assessment Only
 router.post('/api/assess-image-quality', upload.single('image'), async (req, res) => {
   try {

@@ -742,6 +742,102 @@ ${JSON.stringify(rtaData, null, 2)}
   }
 
   // =============================================================================
+  // STEP 5 HELPER: AI VEHICLE ANALYSIS ONLY (without RTA comparison)
+  // Purpose: Analyze vehicle details when RTA data is not available
+  // =============================================================================
+  
+  async step5_analyzeVehicleOnly(imageBuffer, violatingVehicleInfo) {
+    console.log('🔍 STEP 5 HELPER: AI Vehicle Analysis Only (no RTA comparison)...');
+    console.log(`🚗 Analyzing: ${violatingVehicleInfo.description}`);
+    
+    try {
+      const prompt = `
+You are a vehicle analysis expert. Your job is to analyze ONE specific vehicle from the image.
+
+**TARGET VEHICLE TO ANALYZE:**
+Description: ${violatingVehicleInfo.description}
+Location: ${violatingVehicleInfo.location}
+Vehicle Type: ${violatingVehicleInfo.vehicle_type}
+Features: ${violatingVehicleInfo.distinguishing_features || 'Not specified'}
+
+**ANALYSIS TASK:**
+Perform detailed visual analysis of ONLY the target vehicle described above.
+
+**RESPONSE FORMAT:**
+{
+  "visual_analysis": {
+    "vehicle_type": "motorcycle|car|auto-rickshaw|truck|scooter",
+    "color": "specific color observed",
+    "make_brand": "brand if visible (or 'Unknown' if not identifiable)",
+    "model": "model if identifiable (or 'Unknown' if not identifiable)",
+    "occupant_count": number,
+    "distinctive_features": "any notable features observed",
+    "analysis_confidence": 0.85,
+    "visibility": "excellent|good|fair|poor"
+  },
+  "analysis_notes": "Additional observations about the vehicle"
+}
+
+**INSTRUCTIONS:**
+- Focus ONLY on the specified violating vehicle
+- Be specific about make/model if clearly visible
+- Use "Unknown" for fields that cannot be determined
+- Provide realistic confidence scores based on image quality and visibility
+- Include any distinctive features that might help with identification
+`;
+
+      const imagePart = {
+        inlineData: {
+          data: imageBuffer.toString('base64'),
+          mimeType: 'image/jpeg'
+        }
+      };
+
+      const result = await this.model.generateContent([prompt, imagePart]);
+      const response = await result.response;
+      const text = response.text();
+
+      console.log('📄 Step 5 Helper raw response:', text);
+
+      // Parse JSON response
+      const jsonMatch = text.match(/\{[\s\S]*\}/);
+      if (!jsonMatch) {
+        throw new Error('No valid JSON found in response');
+      }
+
+      const assessment = JSON.parse(jsonMatch[0]);
+      
+      console.log(`🔍 Step 5 Helper: Vehicle analysis complete`);
+      console.log(`🚗 Vehicle type: ${assessment.visual_analysis?.vehicle_type}`);
+      console.log(`🎨 Color: ${assessment.visual_analysis?.color}`);
+      console.log(`🏭 Make: ${assessment.visual_analysis?.make_brand}`);
+      console.log(`📊 Confidence: ${assessment.visual_analysis?.analysis_confidence}`);
+      
+      return {
+        success: true,
+        step: 5,
+        step_name: 'AI Vehicle Analysis Only',
+        data: {
+          status: 'ANALYSIS_COMPLETE',
+          visual_analysis: assessment.visual_analysis,
+          analysis_notes: assessment.analysis_notes,
+          target_vehicle: violatingVehicleInfo.description
+        }
+      };
+
+    } catch (error) {
+      console.error('💥 Step 5 Helper error:', error);
+      return {
+        success: false,
+        step: 5,
+        step_name: 'AI Vehicle Analysis Only',
+        error: error.message || 'Failed to analyze vehicle details',
+        errorCode: 'VEHICLE_ANALYSIS_ONLY_FAILED'
+      };
+    }
+  }
+
+  // =============================================================================
   // COMPLETE WORKFLOW EXECUTION
   // Purpose: Execute all 5 steps in sequence
   // =============================================================================
@@ -893,23 +989,56 @@ ${JSON.stringify(rtaData, null, 2)}
       let step5Result;
       
       if (step4Result.success) {
+        // RTA data available - perform full analysis with comparison
         step5Result = await this.step5_analyzeAndCompareVehicle(
           imageBuffer,
           step2Result.data.primary_violating_vehicle,
           step4Result.data.rta_data
         );
       } else {
-        // Proceed with analysis but no comparison
-        step5Result = {
-          success: true,
-          step: 5,
-          step_name: 'AI Vehicle Analysis & Comparison',
-          data: {
-            status: 'ANALYSIS_ONLY',
-            note: 'RTA data not available, performed visual analysis only',
-            rta_data_available: false
-          }
-        };
+        // RTA data not available - still perform vehicle analysis but without comparison
+        console.log('⚠️ RTA data not available, performing vehicle analysis only (without comparison)');
+        const vehicleAnalysisResult = await this.step5_analyzeVehicleOnly(
+          imageBuffer,
+          step2Result.data.primary_violating_vehicle
+        );
+        
+        if (vehicleAnalysisResult.success) {
+          step5Result = {
+            success: true,
+            step: 5,
+            step_name: 'AI Vehicle Analysis & Comparison',
+            data: {
+              status: 'ANALYSIS_ONLY',
+              visual_analysis: vehicleAnalysisResult.data.visual_analysis,
+              comparison_result: {
+                overall_verdict: 'NO_COMPARISON',
+                confidence_score: 0,
+                parameter_analysis: {},
+                explanation: 'No comparison performed - RTA data not available',
+                verification_recommendation: 'REVIEW'
+              },
+              analysis_notes: vehicleAnalysisResult.data.analysis_notes || 'Vehicle analysis completed without RTA comparison',
+              target_vehicle: step2Result.data.primary_violating_vehicle.description,
+              rta_data_available: false,
+              note: 'RTA data not available, performed visual analysis only'
+            }
+          };
+        } else {
+          // Fallback if vehicle analysis also fails
+          step5Result = {
+            success: false,
+            step: 5,
+            step_name: 'AI Vehicle Analysis & Comparison',
+            error: vehicleAnalysisResult.error || 'Failed to analyze vehicle details',
+            errorCode: 'VEHICLE_ANALYSIS_FAILED',
+            data: {
+              status: 'ANALYSIS_FAILED',
+              note: 'Both RTA lookup and vehicle analysis failed',
+              rta_data_available: false
+            }
+          };
+        }
       }
       
       analysis.results.step5 = step5Result;
@@ -1044,6 +1173,316 @@ ${JSON.stringify(rtaData, null, 2)}
       analysis.recommendation = 'Check system logs and retry';
       analysis.next_steps = ['check_logs', 'retry_analysis'];
       return analysis;
+    }
+  }
+
+  // =============================================================================
+  // FOCUSED RE-ANALYSIS WORKFLOW (for manual license plate corrections)
+  // Purpose: Rerun RTA lookup and vehicle analysis with corrected license plate
+  // =============================================================================
+  
+  async runFocusedReAnalysis(imageBuffer, correctedLicensePlate) {
+    console.log('🔄 Starting Focused Re-analysis with Corrected License Plate...');
+    console.log('📋 Corrected plate:', correctedLicensePlate);
+    
+    const analysis = {
+      workflow: 'Focused Re-analysis with Corrected License Plate',
+      timestamp: new Date().toISOString(),
+      results: {},
+      success: false,
+      final_result: null
+    };
+
+    try {
+      // Create placeholder results for Steps 1-3 (skipped but needed for frontend compatibility)
+      console.log('\n=== CREATING PLACEHOLDER RESULTS FOR STEPS 1-3 ===');
+      
+      analysis.results.step1 = {
+        success: true,
+        step: 1,
+        step_name: 'Manual License Plate Correction',
+        data: {
+          status: 'MANUALLY_CORRECTED',
+          quality_category: 'MANUAL_CORRECTION',
+          extracted_license_plate: correctedLicensePlate,
+          license_plate_extractable: true,
+          manually_corrected: true,
+          suitable_for_analysis: true,
+          confidence_level: 1.0,
+          note: 'License plate manually corrected by user'
+        }
+      };
+
+      analysis.results.step2 = {
+        success: true,
+        step: 2,
+        step_name: 'Manual License Plate Correction',
+        data: {
+          status: 'MANUALLY_CORRECTED',
+          license_plate: correctedLicensePlate,
+          extraction_method: 'Manual Correction',
+          confidence: 1.0,
+          manually_corrected: true,
+          note: 'License plate manually corrected by user'
+        }
+      };
+
+      analysis.results.step3 = {
+        success: true,
+        step: 3,
+        step_name: 'Manual License Plate Correction',
+        data: {
+          status: 'MANUALLY_CORRECTED',
+          license_plate: correctedLicensePlate,
+          confidence: 1.0,
+          extraction_method: 'Manual Correction',
+          manually_corrected: true,
+          note: 'License plate manually corrected by user'
+        }
+      };
+
+      // STEP 4: RTA Vehicle Details Lookup with corrected plate
+      console.log('\n=== STEP 4: RTA VEHICLE DETAILS LOOKUP (CORRECTED PLATE) ===');
+      const step4Result = await this.step4_fetchRTADetails(correctedLicensePlate);
+      analysis.results.step4 = step4Result;
+      
+      // STEP 5: AI Vehicle Analysis focused on corrected plate vehicle
+      console.log('\n=== STEP 5: FOCUSED AI VEHICLE ANALYSIS ===');
+      let step5Result;
+      
+      if (step4Result.success) {
+        // RTA data available - perform focused vehicle analysis with comparison
+        console.log('🎯 RTA data found, performing focused vehicle analysis with comparison');
+        step5Result = await this.step5_focusedVehicleAnalysisWithPlate(
+          imageBuffer,
+          correctedLicensePlate,
+          step4Result.data.rta_data
+        );
+      } else {
+        // RTA data not available - still perform focused vehicle analysis
+        console.log('⚠️ RTA data not available, performing focused vehicle analysis only');
+        step5Result = await this.step5_focusedVehicleAnalysisWithPlate(
+          imageBuffer,
+          correctedLicensePlate,
+          null
+        );
+      }
+      
+      analysis.results.step5 = step5Result;
+
+      // STEP 6: Create violation result for frontend compatibility
+      // Since this is a re-analysis, we'll create a simplified step6 result
+      const step6Result = {
+        success: true,
+        step: 6,
+        step_name: 'Re-analysis Completion',
+        data: {
+          violation_analysis: {
+            violations_detected: [],
+            overall_assessment: {
+              total_violations: 0,
+              violation_summary: 'Re-analysis completed with corrected license plate',
+              image_clarity_for_detection: 'good',
+              analysis_confidence: 0.9,
+              analysis_method: 'focused_reanalysis'
+            },
+            enforcement_recommendation: {
+              action: 'REVIEW',
+              priority: 'Medium',
+              notes: `Re-analysis completed with corrected license plate: ${correctedLicensePlate}`
+            },
+            detected_violation_count: 0,
+            violation_types_found: []
+          },
+          detection_method: 'Focused Re-analysis',
+          detection_possible: true,
+          traffic_related: true,
+          vehicles_present: true,
+          quality_sufficient: true,
+          license_plate: correctedLicensePlate,
+          license_plate_confidence: 1.0,
+          vehicle_owner: step4Result.success ? (step4Result.data.rta_data.ownerName || 'Owner information not available') : 'RTA data not found',
+          vehicle_details: step4Result.success ? step4Result.data.rta_data : null,
+          rta_match: step5Result.success ? step5Result.data.comparison_result?.overall_verdict : 'Unknown'
+        }
+      };
+      analysis.results.step6 = step6Result;
+
+      // FINAL RESULT
+      analysis.success = true;
+      analysis.final_result = {
+        action: 'REANALYSIS_COMPLETE',
+        corrected_license_plate: correctedLicensePlate,
+        vehicle_owner: step4Result.success ? (step4Result.data.rta_data.ownerName || 'Owner information not available') : 'RTA data not found',
+        vehicle_details: step4Result.success ? step4Result.data.rta_data : null,
+        vehicle_match: step5Result.success ? step5Result.data.comparison_result?.overall_verdict : 'Unknown',
+        recommendation: 'Re-analysis completed with corrected license plate'
+      };
+
+      console.log('\n🎉 FOCUSED RE-ANALYSIS COMPLETED SUCCESSFULLY!');
+      console.log(`📋 Corrected License Plate: ${correctedLicensePlate}`);
+      console.log(`👤 Vehicle Owner: ${analysis.final_result.vehicle_owner}`);
+      console.log(`🔍 Vehicle Match: ${analysis.final_result.vehicle_match}`);
+      
+      // Add frontend compatibility fields
+      analysis.step = 6;
+      analysis.step_name = 'Focused Re-analysis with Corrected License Plate';
+      analysis.status = 'SUCCESS';
+      analysis.errorCode = null;
+      analysis.error = null;
+      analysis.recommendation = 'Re-analysis completed with corrected license plate';
+      analysis.next_steps = ['review_updated_results'];
+      
+      return analysis;
+
+    } catch (error) {
+      console.error('💥 Focused re-analysis error:', error);
+      
+      analysis.success = false;
+      analysis.final_result = {
+        action: 'REANALYSIS_FAILED',
+        reason: error.message,
+        recommendation: 'Re-analysis failed - manual review required'
+      };
+      analysis.step = 6;
+      analysis.step_name = 'Focused Re-analysis with Corrected License Plate';
+      analysis.status = 'FAILED';
+      analysis.error = error.message;
+      analysis.errorCode = 'FOCUSED_REANALYSIS_FAILED';
+      analysis.recommendation = 'Re-analysis failed - manual review required';
+      analysis.next_steps = ['manual_review_required'];
+      
+      return analysis;
+    }
+  }
+
+  // =============================================================================
+  // STEP 5 HELPER: FOCUSED VEHICLE ANALYSIS WITH LICENSE PLATE CONTEXT
+  // Purpose: Analyze vehicle using license plate as targeting context
+  // =============================================================================
+  
+  async step5_focusedVehicleAnalysisWithPlate(imageBuffer, licensePlate, rtaData) {
+    console.log('🎯 STEP 5 FOCUSED: Vehicle Analysis with License Plate Context...');
+    console.log(`📋 Target license plate: ${licensePlate}`);
+    console.log(`📋 RTA data available: ${!!rtaData}`);
+    
+    try {
+      const prompt = `
+You are a vehicle analysis expert. Your job is to find and analyze the vehicle with the specific license plate "${licensePlate}" in this traffic image.
+
+**TARGET IDENTIFICATION:**
+License Plate to Find: ${licensePlate}
+
+**ANALYSIS TASK:**
+1. **Vehicle Location**: Find the vehicle with license plate "${licensePlate}" in the image
+2. **Visual Analysis**: Analyze ONLY that specific vehicle  
+3. **Comparison**: ${rtaData ? 'Compare with the provided RTA data' : 'Provide analysis without comparison (no RTA data available)'}
+
+${rtaData ? `**RTA DATA TO COMPARE WITH:**
+${JSON.stringify(rtaData, null, 2)}` : '**NOTE:** No RTA data available for comparison'}
+
+**RESPONSE FORMAT:**
+{
+  "target_vehicle_found": true/false,
+  "visual_analysis": {
+    "vehicle_type": "motorcycle|car|auto-rickshaw|truck|scooter",
+    "color": "specific color observed",
+    "make_brand": "brand if visible (or 'Unknown' if not identifiable)",
+    "model": "model if identifiable (or 'Unknown' if not identifiable)",
+    "occupant_count": number,
+    "distinctive_features": "any notable features observed",
+    "analysis_confidence": 0.85,
+    "visibility": "excellent|good|fair|poor",
+    "license_plate_visible": true/false,
+    "license_plate_matches": true/false
+  },
+  ${rtaData ? `"comparison_result": {
+    "overall_verdict": "MATCH|PARTIAL_MATCH|MISMATCH|NO_COMPARISON",
+    "confidence_score": 0.80,
+    "parameter_analysis": {
+      "vehicle_type": {"ai": "car", "rta": "car", "match_status": "MATCH|MISMATCH"},
+      "color": {"ai": "red", "rta": "red", "match_status": "MATCH|MISMATCH"},
+      "make_brand": {"ai": "honda", "rta": "honda", "match_status": "MATCH|MISMATCH"}
+    },
+    "discrepancies": ["list of any mismatches found"],
+    "explanation": "Detailed explanation of the comparison",
+    "verification_recommendation": "APPROVE|REVIEW|REJECT"
+  },` : `"comparison_result": {
+    "overall_verdict": "NO_COMPARISON",
+    "confidence_score": 0,
+    "parameter_analysis": {},
+    "explanation": "No comparison performed - RTA data not available",
+    "verification_recommendation": "REVIEW"
+  },`}
+  "analysis_notes": "Additional observations about the vehicle and analysis process"
+}
+
+**INSTRUCTIONS:**
+- First locate the vehicle with license plate "${licensePlate}"
+- If found, analyze that specific vehicle thoroughly
+- If not found, report target_vehicle_found as false
+- ${rtaData ? 'Compare visual analysis with RTA data if vehicle is found' : 'Provide detailed analysis without comparison'}
+- Be specific about make/model if clearly visible
+- Use "Unknown" for fields that cannot be determined
+`;
+
+      const imagePart = {
+        inlineData: {
+          data: imageBuffer.toString('base64'),
+          mimeType: 'image/jpeg'
+        }
+      };
+
+      const result = await this.model.generateContent([prompt, imagePart]);
+      const response = await result.response;
+      const text = response.text();
+
+      console.log('📄 Step 5 Focused raw response:', text);
+
+      // Parse JSON response
+      const jsonMatch = text.match(/\{[\s\S]*\}/);
+      if (!jsonMatch) {
+        throw new Error('No valid JSON found in response');
+      }
+
+      const assessment = JSON.parse(jsonMatch[0]);
+      
+      if (assessment.target_vehicle_found) {
+        const verdict = assessment.comparison_result?.overall_verdict || 'NO_COMPARISON';
+        console.log(`🎯 Step 5 Focused: Target vehicle found and analyzed - ${verdict}`);
+        console.log(`🚗 Vehicle type: ${assessment.visual_analysis?.vehicle_type}`);
+        console.log(`🎨 Color: ${assessment.visual_analysis?.color}`);
+        console.log(`🏭 Make: ${assessment.visual_analysis?.make_brand}`);
+        console.log(`📊 Confidence: ${assessment.comparison_result?.confidence_score || 'N/A'}`);
+      } else {
+        console.log(`⚠️ Step 5 Focused: Target vehicle with plate "${licensePlate}" not found in image`);
+      }
+      
+      return {
+        success: true,
+        step: 5,
+        step_name: 'Focused AI Vehicle Analysis with License Plate Context',
+        data: {
+          status: assessment.target_vehicle_found ? 'VEHICLE_FOUND_AND_ANALYZED' : 'TARGET_VEHICLE_NOT_FOUND',
+          target_vehicle_found: assessment.target_vehicle_found,
+          target_license_plate: licensePlate,
+          visual_analysis: assessment.visual_analysis,
+          comparison_result: assessment.comparison_result,
+          analysis_notes: assessment.analysis_notes,
+          rta_data_available: !!rtaData,
+          rta_data_used: rtaData
+        }
+      };
+
+    } catch (error) {
+      console.error('💥 Step 5 Focused error:', error);
+      return {
+        success: false,
+        step: 5,
+        step_name: 'Focused AI Vehicle Analysis with License Plate Context',
+        error: error.message || 'Failed to perform focused vehicle analysis',
+        errorCode: 'FOCUSED_VEHICLE_ANALYSIS_FAILED'
+      };
     }
   }
 
