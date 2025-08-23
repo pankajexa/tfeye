@@ -4,6 +4,8 @@ const { MULTER_CONFIG, SAMPLE_RTA_DATA } = require('../config');
 const { analyzeTrafficImage } = require('../gemini-service');
 const visionService = require('../vision-service');
 const stepAnalysisService = require('../services/step-analysis-service');
+const databaseService = require('../services/database-service');
+const s3Service = require('../services/s3-service');
 
 const router = express.Router();
 
@@ -74,6 +76,62 @@ router.post('/api/complete-analysis', upload.single('image'), handleMulterError,
       mimetype: req.file.mimetype
     });
 
+    // Create database record for this analysis
+    let analysisRecord = null;
+    let s3UploadResult = null;
+    
+    try {
+      // First create the database record to get UUID
+      const fileData = {
+        filename: req.file.originalname,
+        fileSize: req.file.size,
+        contentType: req.file.mimetype
+      };
+      
+      // Extract officer data from request body if provided
+      const officerData = {
+        sectorOfficerPsName: req.body.sectorOfficerPsName,
+        sectorOfficerCadre: req.body.sectorOfficerCadre,
+        sectorOfficerName: req.body.sectorOfficerName,
+        capturedByName: req.body.capturedByName,
+        capturedByOfficerId: req.body.capturedByOfficerId,
+        capturedByCadre: req.body.capturedByCadre,
+        psJurisdictionPsName: req.body.psJurisdictionPsName,
+        pointName: req.body.pointName
+      };
+      
+      analysisRecord = await databaseService.createAnalysisRecord(fileData, officerData);
+      console.log(`💾 Created database record with UUID: ${analysisRecord.uuid}`);
+      
+      // Upload to S3 if configured
+      if (s3Service.isConfigured()) {
+        try {
+          s3UploadResult = await s3Service.uploadImage(
+            req.file.buffer,
+            req.file.originalname,
+            req.file.mimetype,
+            analysisRecord.uuid
+          );
+          
+          // Update database with S3 information
+          await databaseService.updateS3Information(analysisRecord.uuid, {
+            s3Url: s3UploadResult.s3Url,
+            s3Key: s3UploadResult.s3Key,
+            s3Bucket: s3UploadResult.bucket
+          });
+          
+          console.log(`📤 Image uploaded to S3: ${s3UploadResult.s3Url}`);
+        } catch (s3Error) {
+          console.warn('⚠️ S3 upload failed, continuing with analysis:', s3Error.message);
+        }
+      } else {
+        console.warn('⚠️ S3 not configured, skipping image upload');
+      }
+      
+    } catch (dbError) {
+      console.warn('⚠️ Database record creation failed, continuing with analysis:', dbError.message);
+    }
+
     // Execute NEW SIMPLIFIED complete workflow
     console.log('🔍 Starting NEW SIMPLIFIED 5-Step Analysis...');
     console.log('📋 Step 1: Image Quality Check');
@@ -83,6 +141,56 @@ router.post('/api/complete-analysis', upload.single('image'), handleMulterError,
     console.log('📋 Step 5: AI Vehicle Analysis & Comparison');
     
     const workflowResult = await stepAnalysisService.runCompleteAnalysis(req.file.buffer);
+    
+    // Update database with analysis results
+    if (analysisRecord && workflowResult.success) {
+      try {
+        await databaseService.updateAnalysisResults(analysisRecord.uuid, workflowResult);
+        console.log(`💾 Updated database record ${analysisRecord.uuid} with analysis results`);
+        
+        // Add database info to response
+        workflowResult.databaseInfo = {
+          uuid: analysisRecord.uuid,
+          recordId: analysisRecord.id,
+          stored: true,
+          s3Upload: s3UploadResult ? {
+            url: s3UploadResult.s3Url,
+            key: s3UploadResult.s3Key,
+            bucket: s3UploadResult.bucket,
+            uploaded: true
+          } : {
+            uploaded: false,
+            reason: s3Service.isConfigured() ? 'Upload failed' : 'S3 not configured'
+          }
+        };
+      } catch (dbError) {
+        console.warn('⚠️ Database update failed:', dbError.message);
+        if (analysisRecord) {
+          await databaseService.updateAnalysisStatus(analysisRecord.uuid, 'failed', dbError.message);
+        }
+        workflowResult.databaseInfo = {
+          uuid: analysisRecord?.uuid,
+          stored: false,
+          error: dbError.message,
+          s3Upload: s3UploadResult ? {
+            url: s3UploadResult.s3Url,
+            key: s3UploadResult.s3Key,
+            bucket: s3UploadResult.bucket,
+            uploaded: true
+          } : {
+            uploaded: false,
+            reason: 'Database update failed'
+          }
+        };
+      }
+    } else if (analysisRecord && !workflowResult.success) {
+      // Analysis failed, update database status
+      try {
+        await databaseService.updateAnalysisStatus(analysisRecord.uuid, 'failed', workflowResult.error);
+      } catch (dbError) {
+        console.warn('⚠️ Failed to update database status:', dbError.message);
+      }
+    }
     
     console.log('✅ NEW SIMPLIFIED Complete Analysis completed');
     res.json(workflowResult);
@@ -970,6 +1078,214 @@ router.post('/api/test-plate-detection', upload.single('image'), async (req, res
       errorCode: 'PLATE_DETECTION_TEST_FAILED'
     });
   }
+});
+
+// ========== DATABASE OPERATION ENDPOINTS ==========
+
+// Record officer review/action
+router.post('/api/officer-review', async (req, res) => {
+  try {
+    const { uuid, officerId, action, reason, modifications } = req.body;
+    
+    if (!uuid || !officerId || !action) {
+      return res.status(400).json({
+        success: false,
+        error: 'Missing required fields: uuid, officerId, action',
+        errorCode: 'MISSING_REQUIRED_FIELDS'
+      });
+    }
+    
+    console.log(`📝 Recording officer review: ${action} by ${officerId} for ${uuid}`);
+    
+    const result = await databaseService.recordOfficerReview(uuid, officerId, action, reason, modifications);
+    
+    res.json({
+      success: true,
+      message: 'Officer review recorded successfully',
+      data: result
+    });
+    
+  } catch (error) {
+    console.error('💥 Officer review recording error:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message || 'Failed to record officer review',
+      errorCode: 'OFFICER_REVIEW_FAILED'
+    });
+  }
+});
+
+// Get analysis by UUID
+router.get('/api/analysis/:uuid', async (req, res) => {
+  try {
+    const { uuid } = req.params;
+    
+    console.log(`🔍 Getting analysis for UUID: ${uuid}`);
+    
+    const analysis = await databaseService.getAnalysisByUuid(uuid);
+    
+    if (!analysis) {
+      return res.status(404).json({
+        success: false,
+        error: 'Analysis not found',
+        errorCode: 'ANALYSIS_NOT_FOUND'
+      });
+    }
+    
+    res.json({
+      success: true,
+      data: analysis
+    });
+    
+  } catch (error) {
+    console.error('💥 Get analysis error:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message || 'Failed to get analysis',
+      errorCode: 'GET_ANALYSIS_FAILED'
+    });
+  }
+});
+
+// Get recent analyses
+router.get('/api/analyses', async (req, res) => {
+  try {
+    const limit = parseInt(req.query.limit) || 50;
+    const offset = parseInt(req.query.offset) || 0;
+    
+    console.log(`📋 Getting recent analyses (limit: ${limit}, offset: ${offset})`);
+    
+    const analyses = await databaseService.getRecentAnalyses(limit, offset);
+    
+    res.json({
+      success: true,
+      data: analyses,
+      pagination: {
+        limit,
+        offset,
+        count: analyses.length
+      }
+    });
+    
+  } catch (error) {
+    console.error('💥 Get analyses error:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message || 'Failed to get analyses',
+      errorCode: 'GET_ANALYSES_FAILED'
+    });
+  }
+});
+
+// Get statistics
+router.get('/api/statistics', async (req, res) => {
+  try {
+    console.log('📊 Getting statistics...');
+    
+    const stats = await databaseService.getStatistics();
+    
+    res.json({
+      success: true,
+      data: stats
+    });
+    
+  } catch (error) {
+    console.error('💥 Get statistics error:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message || 'Failed to get statistics',
+      errorCode: 'GET_STATISTICS_FAILED'
+    });
+  }
+});
+
+// ========== S3 STORAGE ENDPOINTS ==========
+
+// Get presigned URL for secure image access
+router.get('/api/image/:uuid/presigned-url', async (req, res) => {
+  try {
+    const { uuid } = req.params;
+    const expiresIn = parseInt(req.query.expires) || 3600; // 1 hour default
+    
+    console.log(`🔗 Generating presigned URL for analysis: ${uuid}`);
+    
+    // Get S3 key from database
+    const analysis = await databaseService.getAnalysisByUuid(uuid);
+    
+    if (!analysis || !analysis.s3_key) {
+      return res.status(404).json({
+        success: false,
+        error: 'Image not found or not stored in S3',
+        errorCode: 'IMAGE_NOT_FOUND'
+      });
+    }
+    
+    const presignedUrl = await s3Service.getPresignedUrl(analysis.s3_key, expiresIn);
+    
+    res.json({
+      success: true,
+      data: {
+        presignedUrl,
+        expiresIn,
+        s3Key: analysis.s3_key
+      }
+    });
+    
+  } catch (error) {
+    console.error('💥 Presigned URL generation error:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message || 'Failed to generate presigned URL',
+      errorCode: 'PRESIGNED_URL_FAILED'
+    });
+  }
+});
+
+// List recent S3 images
+router.get('/api/s3/images', async (req, res) => {
+  try {
+    const maxKeys = parseInt(req.query.limit) || 100;
+    
+    console.log(`📋 Listing recent S3 images (limit: ${maxKeys})`);
+    
+    if (!s3Service.isConfigured()) {
+      return res.status(400).json({
+        success: false,
+        error: 'S3 service not configured',
+        errorCode: 'S3_NOT_CONFIGURED'
+      });
+    }
+    
+    const images = await s3Service.listRecentImages(maxKeys);
+    
+    res.json({
+      success: true,
+      data: images
+    });
+    
+  } catch (error) {
+    console.error('💥 S3 list images error:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message || 'Failed to list S3 images',
+      errorCode: 'S3_LIST_FAILED'
+    });
+  }
+});
+
+// S3 service status
+router.get('/api/s3/status', (req, res) => {
+  const isConfigured = s3Service.isConfigured();
+  
+  res.json({
+    success: true,
+    data: {
+      configured: isConfigured,
+      bucket: process.env.S3_BUCKET_NAME || 'not-set',
+      region: process.env.AWS_REGION || 'not-set',
+      hasCredentials: !!(process.env.AWS_ACCESS_KEY_ID && process.env.AWS_SECRET_ACCESS_KEY)
+    }
+  });
 });
 
 module.exports = router; 
