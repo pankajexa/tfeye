@@ -56,6 +56,28 @@ const ChallanCard: React.FC<ChallanCardProps> = ({
   });
   const [isReAnalyzing, setIsReAnalyzing] = useState(false);
   
+  // Modify mode state for all fields
+  const [isModifying, setIsModifying] = useState(false);
+  const [modifiedData, setModifiedData] = useState({
+    sectorOfficer: { ...challan.sectorOfficer },
+    capturedBy: { ...challan.capturedBy },
+    jurisdiction: { ...challan.jurisdiction },
+    offenceDateTime: { ...challan.offenceDateTime },
+    violations: [...challan.violations],
+    driverGender: challan.driverGender,
+    fakePlate: challan.fakePlate,
+    ownerAddress: challan.ownerAddress,
+    plateNumber: challan.plateNumber || '',
+    // Vehicle details
+    vehicleDetails: challan.vehicleDetails || {
+      make: 'Unknown',
+      model: 'Unknown', 
+      color: 'Unknown',
+      vehicleType: 'Unknown',
+      confidence: { make: 0, model: 0, color: 0 }
+    }
+  });
+  
   // Access challan context for direct updates
   const { updateChallanWithStepAnalysis } = useChallanContext();
 
@@ -75,6 +97,145 @@ const ChallanCard: React.FC<ChallanCardProps> = ({
       onAction('reject', rejectionReason);
       setShowRejectOptions(false);
       setRejectionReason('');
+    }
+  };
+
+  // Modify mode handlers
+  const handleModifyFieldChange = (section: string, field: string, value: string | boolean) => {
+    if (section === 'direct') {
+      setModifiedData(prev => ({
+        ...prev,
+        [field]: value
+      }));
+    } else if (section === 'vehicleDetails') {
+      setModifiedData(prev => ({
+        ...prev,
+        vehicleDetails: {
+          ...prev.vehicleDetails,
+          [field]: value
+        }
+      }));
+    } else {
+      setModifiedData(prev => ({
+        ...prev,
+        [section]: {
+          ...prev[section as keyof typeof prev],
+          [field]: value
+        }
+      }));
+    }
+  };
+
+  const handleViolationAdd = (violation: string) => {
+    if (!modifiedData.violations.includes(violation)) {
+      setModifiedData(prev => ({
+        ...prev,
+        violations: [...prev.violations, violation]
+      }));
+    }
+  };
+
+  const handleViolationRemove = (index: number) => {
+    setModifiedData(prev => ({
+      ...prev,
+      violations: prev.violations.filter((_, i) => i !== index)
+    }));
+  };
+
+  const handleSaveModifications = () => {
+    const updatedChallan = {
+      ...challan,
+      ...modifiedData
+    };
+    onAction('modify', 'Manual modifications', updatedChallan);
+    setIsModifying(false);
+  };
+
+  const handleCancelModifications = () => {
+    setModifiedData({
+      sectorOfficer: { ...challan.sectorOfficer },
+      capturedBy: { ...challan.capturedBy },
+      jurisdiction: { ...challan.jurisdiction },
+      offenceDateTime: { ...challan.offenceDateTime },
+      violations: [...challan.violations],
+      driverGender: challan.driverGender,
+      fakePlate: challan.fakePlate,
+      ownerAddress: challan.ownerAddress,
+      plateNumber: challan.plateNumber || '',
+      vehicleDetails: challan.vehicleDetails || {
+        make: 'Unknown',
+        model: 'Unknown', 
+        color: 'Unknown',
+        vehicleType: 'Unknown',
+        confidence: { make: 0, model: 0, color: 0 }
+      }
+    });
+    setIsModifying(false);
+  };
+
+  // Helper function to render editable field
+  const renderEditableField = (
+    label: string, 
+    value: string, 
+    section: string, 
+    field: string, 
+    type: 'input' | 'select' | 'textarea' = 'input',
+    options?: string[]
+  ) => {
+    if (isModifying) {
+      const currentValue = section === 'direct' 
+        ? (modifiedData as any)[field] 
+        : section === 'vehicleDetails'
+        ? modifiedData.vehicleDetails[field as keyof typeof modifiedData.vehicleDetails]
+        : (modifiedData as any)[section][field];
+
+      if (type === 'select' && options) {
+        return (
+          <div>
+            <span className="font-medium text-gray-600">{label}:</span>
+            <select
+              value={currentValue || ''}
+              onChange={(e) => handleModifyFieldChange(section, field, e.target.value)}
+              className="mt-1 block w-full px-3 py-1 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+            >
+              {options.map(option => (
+                <option key={option} value={option}>{option}</option>
+              ))}
+            </select>
+          </div>
+        );
+      } else if (type === 'textarea') {
+        return (
+          <div>
+            <span className="font-medium text-gray-600">{label}:</span>
+            <textarea
+              value={currentValue || ''}
+              onChange={(e) => handleModifyFieldChange(section, field, e.target.value)}
+              rows={2}
+              className="mt-1 block w-full px-3 py-1 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+            />
+          </div>
+        );
+      } else {
+        return (
+          <div>
+            <span className="font-medium text-gray-600">{label}:</span>
+            <input
+              type="text"
+              value={currentValue || ''}
+              onChange={(e) => handleModifyFieldChange(section, field, e.target.value)}
+              className="mt-1 block w-full px-3 py-1 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+            />
+          </div>
+        );
+      }
+    } else {
+      return (
+        <div>
+          <span className="font-medium text-gray-600">{label}:</span>
+          <p className="text-gray-900">{value}</p>
+        </div>
+      );
     }
   };
 
@@ -455,16 +616,30 @@ const ChallanCard: React.FC<ChallanCardProps> = ({
               <div className="bg-gray-50 p-3 rounded-lg">
                 <div className="grid grid-cols-2 gap-2 text-sm">
                   <div>
-                    <span className="font-medium text-gray-600">PS Name:</span>
-                    <p className="text-gray-900">{challan.sectorOfficer?.psName || 'Punjagutta Tr PS'}</p>
+                    {renderEditableField(
+                      "PS Name",
+                      challan.sectorOfficer?.psName || 'Jubilee Hills Traffic PS',
+                      'sectorOfficer',
+                      'psName'
+                    )}
                   </div>
                   <div>
-                    <span className="font-medium text-gray-600">Cadre:</span>
-                    <p className="text-gray-900">{challan.sectorOfficer?.cadre || 'CI1'}</p>
+                    {renderEditableField(
+                      "Cadre",
+                      challan.sectorOfficer?.cadre || 'Police Constable',
+                      'sectorOfficer',
+                      'cadre',
+                      'select',
+                      ['Inspector', 'Sub Inspector', 'Head Constable', 'Police Constable']
+                    )}
                   </div>
                   <div className="col-span-2">
-                    <span className="font-medium text-gray-600">Name:</span>
-                    <p className="text-gray-900">{challan.sectorOfficer?.name || 'Ravinder Rao'}</p>
+                    {renderEditableField(
+                      "Name",
+                      challan.sectorOfficer?.name || 'Unknown',
+                      'sectorOfficer',
+                      'name'
+                    )}
                   </div>
                 </div>
               </div>
@@ -478,12 +653,22 @@ const ChallanCard: React.FC<ChallanCardProps> = ({
               <div className="bg-gray-50 p-3 rounded-lg">
                 <div className="text-sm space-y-1">
                   <div>
-                    <span className="font-medium text-gray-600">Cadre:</span>
-                    <p className="text-gray-900">{challan.capturedBy?.cadre || 'Police Constable'}</p>
+                    {renderEditableField(
+                      "Cadre",
+                      challan.capturedBy?.cadre || 'Police Constable',
+                      'capturedBy',
+                      'cadre',
+                      'select',
+                      ['Inspector', 'Sub Inspector', 'Head Constable', 'Police Constable']
+                    )}
                   </div>
                   <div>
-                    <span className="font-medium text-gray-600">Name:</span>
-                    <p className="text-gray-900">{challan.capturedBy?.name || 'Chaitanya'}</p>
+                    {renderEditableField(
+                      "Name",
+                      challan.capturedBy?.name || 'Unknown',
+                      'capturedBy',
+                      'name'
+                    )}
                   </div>
                 </div>
               </div>
@@ -500,12 +685,20 @@ const ChallanCard: React.FC<ChallanCardProps> = ({
               <div className="bg-gray-50 p-3 rounded-lg">
                 <div className="text-sm space-y-1">
                   <div>
-                    <span className="font-medium text-gray-600">PS Name:</span>
-                    <p className="text-gray-900">{challan.jurisdiction?.psName || 'Punjagutta Traffic PS'}</p>
+                    {renderEditableField(
+                      "PS Name",
+                      challan.jurisdiction?.psName || 'Jubilee Hills Traffic PS',
+                      'jurisdiction',
+                      'psName'
+                    )}
                   </div>
                   <div>
-                    <span className="font-medium text-gray-600">Point Name:</span>
-                    <p className="text-gray-900">{challan.jurisdiction?.pointName || 'Vengal Rao Park junction'}</p>
+                    {renderEditableField(
+                      "Point Name",
+                      challan.jurisdiction?.pointName || 'Unknown',
+                      'jurisdiction',
+                      'pointName'
+                    )}
                   </div>
                 </div>
               </div>
@@ -519,12 +712,20 @@ const ChallanCard: React.FC<ChallanCardProps> = ({
               <div className="bg-gray-50 p-3 rounded-lg">
                 <div className="grid grid-cols-2 gap-2 text-sm">
                   <div>
-                    <span className="font-medium text-gray-600">Date:</span>
-                    <p className="text-gray-900">{challan.offenceDateTime?.date || new Date(challan.timestamp).toLocaleDateString()}</p>
+                    {renderEditableField(
+                      "Date",
+                      challan.offenceDateTime?.date || new Date(challan.timestamp).toLocaleDateString(),
+                      'offenceDateTime',
+                      'date'
+                    )}
                   </div>
                   <div>
-                    <span className="font-medium text-gray-600">Time:</span>
-                    <p className="text-gray-900">{challan.offenceDateTime?.time || new Date(challan.timestamp).toLocaleTimeString()}</p>
+                    {renderEditableField(
+                      "Time",
+                      challan.offenceDateTime?.time || new Date(challan.timestamp).toLocaleTimeString(),
+                      'offenceDateTime',
+                      'time'
+                    )}
                   </div>
                 </div>
                 
@@ -809,8 +1010,152 @@ const ChallanCard: React.FC<ChallanCardProps> = ({
           )}
         </div>
 
+        {/* Editable Violations Section when in modify mode */}
+        {isModifying && (
+          <div className="space-y-3">
+            <h4 className="text-sm font-medium text-gray-900 flex items-center">
+              <Edit className="h-4 w-4 mr-2" />
+              Edit Violations
+            </h4>
+            <div className="bg-blue-50 p-4 rounded-lg space-y-3">
+              {/* Current Violations */}
+              {modifiedData.violations.length > 0 && (
+                <div>
+                  <span className="text-sm font-medium text-gray-600">Current Violations:</span>
+                  <div className="mt-2 space-y-2">
+                    {modifiedData.violations.map((violation, index) => (
+                      <div key={index} className="flex items-center justify-between bg-white p-2 rounded border">
+                        <span className="text-sm">{violation}</span>
+                        <button
+                          onClick={() => handleViolationRemove(index)}
+                          className="text-red-600 hover:text-red-800 p-1 rounded"
+                        >
+                          <X className="h-4 w-4" />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+              
+              {/* Add Violation */}
+              <div>
+                <span className="text-sm font-medium text-gray-600">Add Violation:</span>
+                <div className="mt-2 grid grid-cols-3 gap-2">
+                  {['No Helmet', 'Signal Jump', 'Speed Violation', 'Triple Riding', 'Wrong Side Driving', 'Mobile Phone Usage'].map(violation => (
+                    <button
+                      key={violation}
+                      onClick={() => handleViolationAdd(violation)}
+                      disabled={modifiedData.violations.includes(violation)}
+                      className={`px-3 py-2 text-xs rounded border text-left ${
+                        modifiedData.violations.includes(violation)
+                          ? 'bg-gray-200 text-gray-500 cursor-not-allowed'
+                          : 'bg-white hover:bg-blue-50 border-blue-300'
+                      }`}
+                    >
+                      {violation}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Editable Vehicle Details Section when in modify mode */}
+        {isModifying && (
+          <div className="space-y-3">
+            <h4 className="text-sm font-medium text-gray-900 flex items-center">
+              <Car className="h-4 w-4 mr-2" />
+              Edit Vehicle Details
+            </h4>
+            <div className="bg-green-50 p-4 rounded-lg">
+              <div className="grid grid-cols-2 gap-4 text-sm">
+                <div>
+                  {renderEditableField(
+                    "Make",
+                    modifiedData.vehicleDetails.make as string,
+                    'vehicleDetails',
+                    'make'
+                  )}
+                </div>
+                <div>
+                  {renderEditableField(
+                    "Model",
+                    modifiedData.vehicleDetails.model as string,
+                    'vehicleDetails',
+                    'model'
+                  )}
+                </div>
+                <div>
+                  {renderEditableField(
+                    "Color",
+                    modifiedData.vehicleDetails.color as string,
+                    'vehicleDetails',
+                    'color'
+                  )}
+                </div>
+                <div>
+                  {renderEditableField(
+                    "Vehicle Type",
+                    modifiedData.vehicleDetails.vehicleType as string,
+                    'vehicleDetails',
+                    'vehicleType',
+                    'select',
+                    ['Car', 'Motorcycle', 'Auto Rickshaw', 'Bus', 'Truck', 'Unknown']
+                  )}
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Additional editable fields */}
+        {isModifying && (
+          <div className="space-y-3">
+            <h4 className="text-sm font-medium text-gray-900 flex items-center">
+              <Edit className="h-4 w-4 mr-2" />
+              Additional Details
+            </h4>
+            <div className="bg-yellow-50 p-4 rounded-lg space-y-3">
+              <div className="grid grid-cols-2 gap-4 text-sm">
+                <div>
+                  {renderEditableField(
+                    "Driver Gender",
+                    modifiedData.driverGender,
+                    'direct',
+                    'driverGender',
+                    'select',
+                    ['Male', 'Female', 'Unknown']
+                  )}
+                </div>
+                <div>
+                  <label className="flex items-center space-x-2">
+                    <input
+                      type="checkbox"
+                      checked={modifiedData.fakePlate}
+                      onChange={(e) => handleModifyFieldChange('direct', 'fakePlate', e.target.checked)}
+                      className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                    />
+                    <span className="font-medium text-gray-600">Fake/No Plate</span>
+                  </label>
+                </div>
+              </div>
+              <div>
+                {renderEditableField(
+                  "Owner Address",
+                  modifiedData.ownerAddress,
+                  'direct',
+                  'ownerAddress',
+                  'textarea'
+                )}
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* Simplified Violation Analysis - Moved to Bottom */}
-        {(challan.violationAnalysis || challan.violations.length > 0) && (
+        {!isModifying && (challan.violationAnalysis || challan.violations.length > 0) && (
           <div className="space-y-3">
             <h4 className="text-sm font-medium text-gray-900 flex items-center">
               <ShieldAlert className="h-4 w-4 mr-2" />
@@ -884,29 +1229,51 @@ const ChallanCard: React.FC<ChallanCardProps> = ({
         <div className="border-t border-gray-200 pt-6">
           {!showRejectOptions ? (
             <div className="flex flex-wrap gap-3">
-              <button
-                onClick={() => onAction('approve')}
-                className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 transition-colors duration-200"
-              >
-                <CheckCircle className="mr-2 h-4 w-4" />
-                Approve
-              </button>
+              {!isModifying ? (
+                <>
+                  <button
+                    onClick={() => onAction('approve')}
+                    className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 transition-colors duration-200"
+                  >
+                    <CheckCircle className="mr-2 h-4 w-4" />
+                    Approve
+                  </button>
 
-              <button
-                onClick={() => setShowRejectOptions(true)}
-                className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-red-600 hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 transition-colors duration-200"
-              >
-                <XCircle className="mr-2 h-4 w-4" />
-                Reject
-              </button>
+                  <button
+                    onClick={() => setShowRejectOptions(true)}
+                    className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-red-600 hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 transition-colors duration-200"
+                  >
+                    <XCircle className="mr-2 h-4 w-4" />
+                    Reject
+                  </button>
 
-              <button
-                disabled
-                className="inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-400 bg-gray-100 cursor-not-allowed"
-              >
-                <Edit3 className="mr-2 h-4 w-4" />
-                Modify (Coming Soon)
-              </button>
+                  <button
+                    onClick={() => setIsModifying(true)}
+                    className="inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 transition-colors duration-200"
+                  >
+                    <Edit3 className="mr-2 h-4 w-4" />
+                    Modify
+                  </button>
+                </>
+              ) : (
+                <>
+                  <button
+                    onClick={handleSaveModifications}
+                    className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors duration-200"
+                  >
+                    <Save className="mr-2 h-4 w-4" />
+                    Save Changes
+                  </button>
+
+                  <button
+                    onClick={handleCancelModifications}
+                    className="inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 transition-colors duration-200"
+                  >
+                    <X className="mr-2 h-4 w-4" />
+                    Cancel
+                  </button>
+                </>
+              )}
             </div>
           ) : (
             <div className="space-y-4">

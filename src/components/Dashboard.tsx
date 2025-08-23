@@ -18,7 +18,7 @@ const Dashboard: React.FC = () => {
   const generateViolationsData = () => {
     const dailyStats = new Map();
     
-    challans.forEach(challan => {
+    challans.forEach((challan, index) => {
       const date = new Date(challan.timestamp).toLocaleDateString('en-GB', {
         day: '2-digit',
         month: 'short',
@@ -27,6 +27,7 @@ const Dashboard: React.FC = () => {
       
       if (!dailyStats.has(date)) {
         dailyStats.set(date, {
+          id: dailyStats.size + 1,
           date,
           aiProcessed: 0,
           pendingReview: 0,
@@ -198,9 +199,9 @@ const Dashboard: React.FC = () => {
             </thead>
             <tbody className="bg-white divide-y divide-gray-200">
               {violationsData.length > 0 ? (
-                violationsData.map((row, index) => (
-                  <tr key={`${row.date}-${index}`} className="hover:bg-gray-50">
-                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{index + 1}</td>
+                violationsData.map((row) => (
+                  <tr key={row.id} className="hover:bg-gray-50">
+                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{row.id}</td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{row.date}</td>
                     <td className="px-6 py-4 whitespace-nowrap">
                       <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
@@ -233,7 +234,7 @@ const Dashboard: React.FC = () => {
                 <tr>
                   <td colSpan={7} className="px-6 py-12 text-center">
                     <div className="text-gray-500">
-                      <p className="text-sm">No violation data available</p>
+                      <p className="text-sm">No data available</p>
                       <p className="text-xs mt-1">Start by uploading traffic images to see statistics</p>
                     </div>
                   </td>

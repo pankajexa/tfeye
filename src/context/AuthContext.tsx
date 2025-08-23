@@ -34,8 +34,8 @@ const VALID_CREDENTIALS = {
     password: 'test@tse',
     officer: {
       id: '2585272',
-      name: '',
-      cadre: '',
+      name: 'Unknown',
+      cadre: 'Police Constable',
       psName: 'Jubilee Hills Traffic PS'
     }
   },
@@ -43,8 +43,8 @@ const VALID_CREDENTIALS = {
     password: 'test@tse',
     officer: {
       id: '2603326',
-      name: '',
-      cadre: '',
+      name: 'Unknown',
+      cadre: 'Police Constable',
       psName: 'Jubilee Hills Traffic PS'
     }
   }
