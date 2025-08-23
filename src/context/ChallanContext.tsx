@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useState, ReactNode } from 'react';
 import { WorkflowResponse } from '../services/api';
 import { ViolationAnalysis, VehicleComparison, VehicleAnalysis, WorkflowSummary, RTAData, StepAnalysisResponse, QualityAssessmentData, OCRData } from '../types';
+import { useAuth } from './AuthContext';
 
 // Enhanced Challan interface that includes Step 6 workflow data
 export interface Challan {
@@ -112,9 +113,18 @@ interface ChallanProviderProps {
 
 export const ChallanProvider: React.FC<ChallanProviderProps> = ({ children }) => {
   const [challans, setChallans] = useState<Challan[]>([]);
+  const { currentOfficer } = useAuth();
 
   const addChallan = (file: File): string => {
     const id = `CH${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+    
+    // Use current officer info if available, fallback to defaults
+    const officerInfo = currentOfficer || {
+      name: 'Unknown Officer',
+      cadre: 'Officer',
+      psName: 'Jubilee Hills Traffic PS'
+    };
+    
     const newChallan: Challan = {
       id,
       originalFile: file,
@@ -125,18 +135,18 @@ export const ChallanProvider: React.FC<ChallanProviderProps> = ({ children }) =>
       violations: [],
       plateNumber: undefined,
       sectorOfficer: {
-        psName: 'Punjagutta Tr PS',
-        cadre: 'CI1',
-        name: 'Ravinder Rao'
+        psName: officerInfo.psName,
+        cadre: officerInfo.cadre,
+        name: officerInfo.name
       },
       capturedBy: {
-        psName: 'Punjagutta Traffic PS',
-        cadre: 'Police Constable',
-        name: 'Chaitanya'
+        psName: officerInfo.psName,
+        cadre: officerInfo.cadre,
+        name: officerInfo.name
       },
       jurisdiction: {
-        psName: 'Punjagutta Traffic PS',
-        pointName: 'Vengal Rao Park junction'
+        psName: 'Jubilee Hills Traffic PS',
+        pointName: 'Main Junction'
       },
       offenceDateTime: {
         date: new Date().toLocaleDateString(),
@@ -242,23 +252,26 @@ export const ChallanProvider: React.FC<ChallanProviderProps> = ({ children }) =>
           vehicleComparison,
           vehicleAnalysisData: step4Data?.vehicle_analysis,
           qualityCategory: step1Data?.quality_category,
-          rtaData: step3Data?.rta_data,
+          rtaData: step4Data?.rta_data || step3Data?.rta_data,
           vehicleMatches,
           rtaMatched: vehicleComparison?.overall_verdict === 'MATCH',
           offenceDateTime, // Use extracted or fallback timestamp
           
-          // Legacy compatibility
-          vehicleDetails: step4Data?.vehicle_analysis ? {
-            make: step4Data.vehicle_analysis.make || 'Unknown',
-            model: step4Data.vehicle_analysis.model || 'Unknown',
-            color: step4Data.vehicle_analysis.color || 'Unknown',
-            vehicleType: step4Data.vehicle_analysis.vehicle_type || 'Unknown',
-            confidence: {
-              make: step4Data.vehicle_analysis.analysis_confidence || 0,
-              model: step4Data.vehicle_analysis.analysis_confidence || 0,
-              color: step4Data.vehicle_analysis.analysis_confidence || 0
-            }
-          } : undefined,
+          // Legacy compatibility - prioritize Step 5, then Step 6, then Step 2 for vehicle analysis
+          vehicleDetails: (() => {
+            const vehicleAnalysis = step5Data?.vehicle_analysis || step6Data?.vehicle_analysis || step2Data?.primary_violating_vehicle;
+            return vehicleAnalysis ? {
+              make: vehicleAnalysis.make || 'Unknown',
+              model: vehicleAnalysis.model || 'Unknown',
+              color: vehicleAnalysis.color || 'Unknown',
+              vehicleType: vehicleAnalysis.vehicle_type || 'Unknown',
+              confidence: {
+                make: vehicleAnalysis.analysis_confidence || 0,
+                model: vehicleAnalysis.analysis_confidence || 0,
+                color: vehicleAnalysis.analysis_confidence || 0
+              }
+            } : undefined;
+          })(),
           rtaVerification: vehicleComparison ? {
             status: vehicleComparison.overall_verdict,
             matches: vehicleComparison.overall_verdict === 'MATCH',

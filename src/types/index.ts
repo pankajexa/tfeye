@@ -17,6 +17,7 @@ export interface RTAData {
   ownerName: string;
   ownerAddress: string;
   vehicleClass: string;
+  vehicleCategory?: string;
   make: string;
   model: string;
   color: string;
@@ -29,6 +30,11 @@ export interface RTAData {
   rcStatus: 'ACTIVE' | 'SUSPENDED' | 'CANCELLED';
   state: string;
   rto: string;
+  // Additional fields for the new structure
+  series?: string;
+  vehicleNumber?: string;
+  makerName?: string;
+  makerModel?: string;
 }
 
 // RTA API Response structure
