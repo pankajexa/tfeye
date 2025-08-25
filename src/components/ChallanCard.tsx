@@ -88,70 +88,21 @@ const ChallanCard: React.FC<ChallanCardProps> = ({
     onAction('modify', 'Manual modifications', modifiedChallan);
   };
 
-  // Helper function to render editable field
+  // Helper function to render display field (read-only, editing is done via modal)
   const renderEditableField = (
     label: string, 
     value: string, 
-    section: string, 
-    field: string, 
-    type: 'input' | 'select' | 'textarea' = 'input',
+    section?: string, 
+    field?: string, 
+    type?: 'input' | 'select' | 'textarea',
     options?: string[]
   ) => {
-    if (isModifying) {
-      const currentValue = section === 'direct' 
-        ? (modifiedData as any)[field] 
-        : section === 'vehicleDetails'
-        ? modifiedData.vehicleDetails[field as keyof typeof modifiedData.vehicleDetails]
-        : (modifiedData as any)[section][field];
-
-      if (type === 'select' && options) {
-        return (
-          <div>
-            <span className="font-medium text-gray-600">{label}:</span>
-            <select
-              value={currentValue || ''}
-              onChange={(e) => handleModifyFieldChange(section, field, e.target.value)}
-              className="mt-1 block w-full px-3 py-1 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-            >
-              {options.map(option => (
-                <option key={option} value={option}>{option}</option>
-              ))}
-            </select>
-          </div>
-        );
-      } else if (type === 'textarea') {
-        return (
-          <div>
-            <span className="font-medium text-gray-600">{label}:</span>
-            <textarea
-              value={currentValue || ''}
-              onChange={(e) => handleModifyFieldChange(section, field, e.target.value)}
-              rows={2}
-              className="mt-1 block w-full px-3 py-1 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-            />
-          </div>
-        );
-      } else {
-        return (
-          <div>
-            <span className="font-medium text-gray-600">{label}:</span>
-            <input
-              type="text"
-              value={currentValue || ''}
-              onChange={(e) => handleModifyFieldChange(section, field, e.target.value)}
-              className="mt-1 block w-full px-3 py-1 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-            />
-          </div>
-        );
-      }
-    } else {
-      return (
-        <div>
-          <span className="font-medium text-gray-600">{label}:</span>
-          <p className="text-gray-900">{value}</p>
-        </div>
-      );
-    }
+    return (
+      <div>
+        <span className="font-medium text-gray-600">{label}:</span>
+        <span className="ml-2 text-gray-900">{value || 'N/A'}</span>
+      </div>
+    );
   };
 
   // Edit functionality handlers
@@ -1002,33 +953,29 @@ const ChallanCard: React.FC<ChallanCardProps> = ({
         <div className="border-t border-gray-200 pt-6">
           {!showRejectOptions ? (
             <div className="flex flex-wrap gap-3">
-              {!isModifying ? (
-                <>
-                  <button
-                    onClick={() => onAction('approve')}
-                    className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 transition-colors duration-200"
-                  >
-                    <CheckCircle className="mr-2 h-4 w-4" />
-                    Approve
-                  </button>
+              <button
+                onClick={() => onAction('approve')}
+                className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 transition-colors duration-200"
+              >
+                <CheckCircle className="mr-2 h-4 w-4" />
+                Approve
+              </button>
 
-                  <button
-                    onClick={() => setShowRejectOptions(true)}
-                    className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-red-600 hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 transition-colors duration-200"
-                  >
-                    <XCircle className="mr-2 h-4 w-4" />
-                    Reject
-                  </button>
+              <button
+                onClick={() => setShowRejectOptions(true)}
+                className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-red-600 hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 transition-colors duration-200"
+              >
+                <XCircle className="mr-2 h-4 w-4" />
+                Reject
+              </button>
 
-                  <button
-                    onClick={() => setIsModifyModalOpen(true)}
-                    className="inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 transition-colors duration-200"
-                  >
-                    <Edit3 className="mr-2 h-4 w-4" />
-                    Modify
-                  </button>
-                </>
-              )}
+              <button
+                onClick={() => setIsModifyModalOpen(true)}
+                className="inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 transition-colors duration-200"
+              >
+                <Edit3 className="mr-2 h-4 w-4" />
+                Modify
+              </button>
             </div>
           ) : (
             <div className="space-y-4">
