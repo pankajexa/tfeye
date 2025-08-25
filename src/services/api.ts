@@ -579,6 +579,31 @@ class ApiService {
     }
     return response.json();
   }
+
+  // Violations API methods
+  async getViolations() {
+    const response = await fetch(`${BACKEND_URL}/api/violations`);
+    return response.json();
+  }
+
+  async getViolationsByVehicleType(vehicleType: string) {
+    const response = await fetch(`${BACKEND_URL}/api/violations/vehicle/${encodeURIComponent(vehicleType)}`);
+    return response.json();
+  }
+
+  async calculateFine(violationNames: string[], vehicleType: string) {
+    const response = await fetch(`${BACKEND_URL}/api/violations/calculate-fine`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        violationNames,
+        vehicleType,
+      }),
+    });
+    return response.json();
+  }
 }
 
 export const apiService = new ApiService(); 

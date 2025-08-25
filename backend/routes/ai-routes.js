@@ -6,6 +6,7 @@ const visionService = require('../vision-service');
 const stepAnalysisService = require('../services/step-analysis-service');
 const databaseService = require('../services/database-service');
 const s3Service = require('../services/s3-service');
+const violationsData = require('../traffic_violations');
 
 const router = express.Router();
 
@@ -1286,6 +1287,83 @@ router.get('/api/s3/status', (req, res) => {
       hasCredentials: !!(process.env.AWS_ACCESS_KEY_ID && process.env.AWS_SECRET_ACCESS_KEY)
     }
   });
+});
+
+// ========== VIOLATIONS DATA ENDPOINTS ==========
+
+// Get all violations
+router.get('/api/violations', (req, res) => {
+  try {
+    res.json({
+      success: true,
+      data: violationsData.trafficViolations,
+      total: violationsData.trafficViolations.length
+    });
+  } catch (error) {
+    console.error('💥 Get violations error:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message || 'Failed to get violations',
+      errorCode: 'GET_VIOLATIONS_FAILED'
+    });
+  }
+});
+
+// Get violations by vehicle type
+router.get('/api/violations/vehicle/:vehicleType', (req, res) => {
+  try {
+    const { vehicleType } = req.params;
+    const violations = violationsData.getViolationsByVehicleType(vehicleType);
+    
+    res.json({
+      success: true,
+      data: violations,
+      vehicleType,
+      total: violations.length
+    });
+  } catch (error) {
+    console.error('💥 Get violations by vehicle type error:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message || 'Failed to get violations by vehicle type',
+      errorCode: 'GET_VIOLATIONS_BY_TYPE_FAILED'
+    });
+  }
+});
+
+// Calculate fine for violations
+router.post('/api/violations/calculate-fine', (req, res) => {
+  try {
+    const { violationNames, vehicleType } = req.body;
+    
+    if (!violationNames || !Array.isArray(violationNames)) {
+      return res.status(400).json({
+        success: false,
+        error: 'violationNames must be an array',
+        errorCode: 'INVALID_VIOLATIONS'
+      });
+    }
+    
+    const totalFine = violationsData.calculateTotalFine(violationNames, vehicleType);
+    const violationDetails = violationNames.map(name => violationsData.getViolationByName(name)).filter(Boolean);
+    
+    res.json({
+      success: true,
+      data: {
+        totalFine,
+        vehicleType,
+        violationCount: violationNames.length,
+        violations: violationDetails
+      }
+    });
+  } catch (error) {
+    console.error('💥 Calculate fine error:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message || 'Failed to calculate fine',
+      errorCode: 'CALCULATE_FINE_FAILED'
+    });
+  }
 });
 
 module.exports = router; 
