@@ -21,6 +21,7 @@ import {
 } from 'lucide-react';
 import { Challan, useChallanContext } from '../context/ChallanContext';
 import ImageZoom from './ImageZoom';
+import ModifyModal from './ModifyModal';
 import { apiService } from '../services/api';
 
 interface ChallanCardProps {
@@ -57,66 +58,8 @@ const ChallanCard: React.FC<ChallanCardProps> = ({
   });
   const [isReAnalyzing, setIsReAnalyzing] = useState(false);
   
-  // Modify mode state for all fields
-  const [isModifying, setIsModifying] = useState(false);
-  const [modifiedData, setModifiedData] = useState({
-    sectorOfficer: { ...challan.sectorOfficer },
-    capturedBy: { ...challan.capturedBy },
-    jurisdiction: { ...challan.jurisdiction },
-    offenceDateTime: { ...challan.offenceDateTime },
-    violations: [...challan.violations],
-    driverGender: challan.driverGender,
-    fakePlate: challan.fakePlate,
-    ownerAddress: challan.ownerAddress,
-    plateNumber: challan.plateNumber || '',
-    // Vehicle details
-    vehicleDetails: challan.vehicleDetails || {
-      make: 'Unknown',
-      model: 'Unknown', 
-      color: 'Unknown',
-      vehicleType: 'Unknown',
-      confidence: { make: 0, model: 0, color: 0 }
-    }
-  });
-  
-  // Violations data state
-  const [availableViolations, setAvailableViolations] = useState([]);
-  const [loadingViolations, setLoadingViolations] = useState(false);
-  const [totalFine, setTotalFine] = useState(0);
-  const [violationSearch, setViolationSearch] = useState('');
-  
-  // Load violations when modify mode is activated
-  const loadViolationsData = async () => {
-    try {
-      setLoadingViolations(true);
-      const vehicleType = modifiedData.vehicleDetails.vehicleType || 'Car';
-      const data = await apiService.getViolationsByVehicleType(vehicleType);
-      
-      if (data.success) {
-        setAvailableViolations(data.data);
-      }
-    } catch (error) {
-      console.error('Failed to load violations:', error);
-    } finally {
-      setLoadingViolations(false);
-    }
-  };
-  
-  // Calculate total fine when violations change
-  const calculateFine = async () => {
-    try {
-      const data = await apiService.calculateFine(
-        modifiedData.violations,
-        modifiedData.vehicleDetails.vehicleType || 'Car'
-      );
-      
-      if (data.success) {
-        setTotalFine(data.data.totalFine);
-      }
-    } catch (error) {
-      console.error('Failed to calculate fine:', error);
-    }
-  };
+  // Modal state for modify functionality
+  const [isModifyModalOpen, setIsModifyModalOpen] = useState(false);
   
   // Access challan context for direct updates
   const { updateChallanWithStepAnalysis } = useChallanContext();
@@ -140,81 +83,9 @@ const ChallanCard: React.FC<ChallanCardProps> = ({
     }
   };
 
-  // Modify mode handlers
-  const handleModifyFieldChange = (section: string, field: string, value: string | boolean) => {
-    if (section === 'direct') {
-      setModifiedData(prev => ({
-        ...prev,
-        [field]: value
-      }));
-    } else if (section === 'vehicleDetails') {
-      setModifiedData(prev => ({
-        ...prev,
-        vehicleDetails: {
-          ...prev.vehicleDetails,
-          [field]: value
-        }
-      }));
-    } else {
-      setModifiedData(prev => ({
-        ...prev,
-        [section]: {
-          ...prev[section as keyof typeof prev],
-          [field]: value
-        }
-      }));
-    }
-  };
-
-  const handleViolationAdd = async (violation: string) => {
-    if (!modifiedData.violations.includes(violation)) {
-      setModifiedData(prev => ({
-        ...prev,
-        violations: [...prev.violations, violation]
-      }));
-      // Recalculate fine after adding violation
-      setTimeout(calculateFine, 100);
-    }
-  };
-
-  const handleViolationRemove = async (index: number) => {
-    setModifiedData(prev => ({
-      ...prev,
-      violations: prev.violations.filter((_, i) => i !== index)
-    }));
-    // Recalculate fine after removing violation
-    setTimeout(calculateFine, 100);
-  };
-
-  const handleSaveModifications = () => {
-    const updatedChallan = {
-      ...challan,
-      ...modifiedData
-    };
-    onAction('modify', 'Manual modifications', updatedChallan);
-    setIsModifying(false);
-  };
-
-  const handleCancelModifications = () => {
-    setModifiedData({
-      sectorOfficer: { ...challan.sectorOfficer },
-      capturedBy: { ...challan.capturedBy },
-      jurisdiction: { ...challan.jurisdiction },
-      offenceDateTime: { ...challan.offenceDateTime },
-      violations: [...challan.violations],
-      driverGender: challan.driverGender,
-      fakePlate: challan.fakePlate,
-      ownerAddress: challan.ownerAddress,
-      plateNumber: challan.plateNumber || '',
-      vehicleDetails: challan.vehicleDetails || {
-        make: 'Unknown',
-        model: 'Unknown', 
-        color: 'Unknown',
-        vehicleType: 'Unknown',
-        confidence: { make: 0, model: 0, color: 0 }
-      }
-    });
-    setIsModifying(false);
+  // Handle saving modifications from modal
+  const handleSaveModifications = (modifiedChallan: Challan) => {
+    onAction('modify', 'Manual modifications', modifiedChallan);
   };
 
   // Helper function to render editable field
@@ -1054,295 +925,10 @@ const ChallanCard: React.FC<ChallanCardProps> = ({
           )}
         </div>
 
-        {/* BEAUTIFUL NEW MODIFY UI */}
-        {isModifying && (
-          <div className="bg-gradient-to-r from-blue-50 to-indigo-50 p-6 rounded-xl shadow-lg border-2 border-blue-200">
-            <div className="flex items-center justify-between mb-6">
-              <h3 className="text-xl font-bold text-gray-800 flex items-center">
-                <Edit className="h-6 w-6 mr-3 text-blue-600" />
-                Edit Challan Details
-              </h3>
-              <div className="flex items-center space-x-4">
-                <div className="text-right">
-                  <p className="text-sm text-gray-600">Total Fine Amount</p>
-                  <p className="text-2xl font-bold text-green-600">₹{totalFine.toLocaleString()}</p>
-                </div>
-              </div>
-            </div>
 
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              
-              {/* Left Column - Officer & Jurisdiction Details */}
-              <div className="space-y-6">
-                
-                {/* Officer Details Card */}
-                <div className="bg-white rounded-lg p-5 shadow-md border border-gray-200">
-                  <h4 className="text-lg font-semibold text-gray-800 mb-4 flex items-center">
-                    <User className="h-5 w-5 mr-2 text-blue-600" />
-                    Officer Details
-                  </h4>
-                  <div className="space-y-4">
-                    <div className="grid grid-cols-2 gap-4">
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">PS Name</label>
-                        <input
-                          type="text"
-                          value={modifiedData.sectorOfficer.psName}
-                          onChange={(e) => handleModifyFieldChange('sectorOfficer', 'psName', e.target.value)}
-                          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors"
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">Cadre</label>
-                        <select
-                          value={modifiedData.sectorOfficer.cadre}
-                          onChange={(e) => handleModifyFieldChange('sectorOfficer', 'cadre', e.target.value)}
-                          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors"
-                        >
-                          <option value="Inspector">Inspector</option>
-                          <option value="Sub Inspector">Sub Inspector</option>
-                          <option value="Head Constable">Head Constable</option>
-                          <option value="Police Constable">Police Constable</option>
-                        </select>
-                      </div>
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Officer Name</label>
-                      <input
-                        type="text"
-                        value={modifiedData.sectorOfficer.name}
-                        onChange={(e) => handleModifyFieldChange('sectorOfficer', 'name', e.target.value)}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors"
-                      />
-                    </div>
-                  </div>
-                </div>
-
-                {/* Jurisdiction Card */}
-                <div className="bg-white rounded-lg p-5 shadow-md border border-gray-200">
-                  <h4 className="text-lg font-semibold text-gray-800 mb-4 flex items-center">
-                    <MapPin className="h-5 w-5 mr-2 text-green-600" />
-                    Jurisdiction & Location
-                  </h4>
-                  <div className="space-y-4">
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">PS Name</label>
-                      <input
-                        type="text"
-                        value={modifiedData.jurisdiction.psName}
-                        onChange={(e) => handleModifyFieldChange('jurisdiction', 'psName', e.target.value)}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-green-500 transition-colors"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Point Name</label>
-                      <input
-                        type="text"
-                        value={modifiedData.jurisdiction.pointName}
-                        onChange={(e) => handleModifyFieldChange('jurisdiction', 'pointName', e.target.value)}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-green-500 transition-colors"
-                      />
-                    </div>
-                    <div className="grid grid-cols-2 gap-4">
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">Date</label>
-                        <input
-                          type="text"
-                          value={modifiedData.offenceDateTime.date}
-                          onChange={(e) => handleModifyFieldChange('offenceDateTime', 'date', e.target.value)}
-                          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-green-500 transition-colors"
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">Time</label>
-                        <input
-                          type="text"
-                          value={modifiedData.offenceDateTime.time}
-                          onChange={(e) => handleModifyFieldChange('offenceDateTime', 'time', e.target.value)}
-                          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-green-500 transition-colors"
-                        />
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Vehicle Details Card */}
-                <div className="bg-white rounded-lg p-5 shadow-md border border-gray-200">
-                  <h4 className="text-lg font-semibold text-gray-800 mb-4 flex items-center">
-                    <Car className="h-5 w-5 mr-2 text-purple-600" />
-                    Vehicle Information
-                  </h4>
-                  <div className="space-y-4">
-                    <div className="grid grid-cols-2 gap-4">
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">Make</label>
-                        <input
-                          type="text"
-                          value={modifiedData.vehicleDetails.make as string}
-                          onChange={(e) => handleModifyFieldChange('vehicleDetails', 'make', e.target.value)}
-                          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-purple-500 transition-colors"
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">Model</label>
-                        <input
-                          type="text"
-                          value={modifiedData.vehicleDetails.model as string}
-                          onChange={(e) => handleModifyFieldChange('vehicleDetails', 'model', e.target.value)}
-                          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-purple-500 transition-colors"
-                        />
-                      </div>
-                    </div>
-                    <div className="grid grid-cols-2 gap-4">
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">Color</label>
-                        <input
-                          type="text"
-                          value={modifiedData.vehicleDetails.color as string}
-                          onChange={(e) => handleModifyFieldChange('vehicleDetails', 'color', e.target.value)}
-                          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-purple-500 transition-colors"
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">Vehicle Type</label>
-                        <select
-                          value={modifiedData.vehicleDetails.vehicleType as string}
-                          onChange={async (e) => {
-                            handleModifyFieldChange('vehicleDetails', 'vehicleType', e.target.value);
-                            // Reload violations when vehicle type changes
-                            setTimeout(async () => {
-                              await loadViolationsData();
-                              await calculateFine();
-                            }, 100);
-                          }}
-                          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-purple-500 transition-colors"
-                        >
-                          <option value="Car">Car</option>
-                          <option value="Motorcycle">Motorcycle</option>
-                          <option value="Auto Rickshaw">Auto Rickshaw</option>
-                          <option value="Bus">Bus</option>
-                          <option value="Truck">Truck</option>
-                          <option value="Lorry">Lorry</option>
-                        </select>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              {/* Right Column - Violations Management */}
-              <div className="space-y-6">
-                
-                {/* Violations Card */}
-                <div className="bg-white rounded-lg p-5 shadow-md border border-gray-200">
-                  <h4 className="text-lg font-semibold text-gray-800 mb-4 flex items-center">
-                    <ShieldAlert className="h-5 w-5 mr-2 text-red-600" />
-                    Traffic Violations
-                  </h4>
-                  
-                  {/* Current Violations */}
-                  {modifiedData.violations.length > 0 && (
-                    <div className="mb-6">
-                      <p className="text-sm font-medium text-gray-700 mb-3">Selected Violations ({modifiedData.violations.length})</p>
-                      <div className="space-y-2 max-h-32 overflow-y-auto">
-                        {modifiedData.violations.map((violation, index) => {
-                          const violationData = availableViolations.find(v => v.violationName === violation);
-                          return (
-                            <div key={index} className="flex items-center justify-between bg-red-50 p-3 rounded-lg border border-red-200">
-                              <div className="flex-1">
-                                <p className="text-sm font-medium text-red-900">{violation}</p>
-                                {violationData && (
-                                  <div className="flex items-center space-x-4 text-xs text-red-700 mt-1">
-                                    <span>{violationData.section}</span>
-                                    <span className="font-semibold">₹{violationData.fine}</span>
-                                  </div>
-                                )}
-                              </div>
-                              <button
-                                onClick={async () => {
-                                  handleViolationRemove(index);
-                                  await calculateFine();
-                                }}
-                                className="ml-2 p-1 text-red-600 hover:text-red-800 hover:bg-red-100 rounded-md transition-colors"
-                              >
-                                <X className="h-4 w-4" />
-                              </button>
-                            </div>
-                          );
-                        })}
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Add Violations */}
-                  <div>
-                    <p className="text-sm font-medium text-gray-700 mb-3">Add Violations</p>
-                    
-                    {/* Search Box */}
-                    <div className="relative mb-4">
-                      <input
-                        type="text"
-                        placeholder="Search violations..."
-                        value={violationSearch}
-                        onChange={(e) => setViolationSearch(e.target.value)}
-                        className="w-full px-4 py-2 pl-10 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                      />
-                      <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
-                    </div>
-
-                    {/* Violations List */}
-                    {loadingViolations ? (
-                      <div className="text-center py-4">
-                        <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600 mx-auto"></div>
-                        <p className="text-sm text-gray-500 mt-2">Loading violations...</p>
-                      </div>
-                    ) : (
-                      <div className="max-h-64 overflow-y-auto space-y-2">
-                        {availableViolations
-                          .filter(violation => 
-                            violation.violationName.toLowerCase().includes(violationSearch.toLowerCase()) ||
-                            violation.section.toLowerCase().includes(violationSearch.toLowerCase())
-                          )
-                          .map((violation, index) => (
-                          <div
-                            key={index}
-                            className={`p-3 rounded-lg border cursor-pointer transition-all ${
-                              modifiedData.violations.includes(violation.violationName)
-                                ? 'bg-gray-100 border-gray-300 opacity-50 cursor-not-allowed'
-                                : 'bg-white border-gray-200 hover:bg-blue-50 hover:border-blue-300'
-                            }`}
-                            onClick={async () => {
-                              if (!modifiedData.violations.includes(violation.violationName)) {
-                                handleViolationAdd(violation.violationName);
-                                await calculateFine();
-                              }
-                            }}
-                          >
-                            <div className="flex items-center justify-between">
-                              <div className="flex-1">
-                                <p className="text-sm font-medium text-gray-900">{violation.violationName}</p>
-                                <div className="flex items-center space-x-4 text-xs text-gray-600 mt-1">
-                                  <span>{violation.section}</span>
-                                  <span className="font-semibold text-green-600">₹{violation.fine}</span>
-                                </div>
-                              </div>
-                              {modifiedData.violations.includes(violation.violationName) && (
-                                <CheckCircle className="h-5 w-5 text-green-600" />
-                              )}
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-        )}
 
         {/* Simplified Violation Analysis - Moved to Bottom */}
-        {!isModifying && (challan.violationAnalysis || challan.violations.length > 0) && (
+        {(challan.violationAnalysis || challan.violations.length > 0) && (
           <div className="space-y-3">
             <h4 className="text-sm font-medium text-gray-900 flex items-center">
               <ShieldAlert className="h-4 w-4 mr-2" />
@@ -1435,33 +1021,11 @@ const ChallanCard: React.FC<ChallanCardProps> = ({
                   </button>
 
                   <button
-                    onClick={async () => {
-                      setIsModifying(true);
-                      await loadViolationsData();
-                      await calculateFine();
-                    }}
+                    onClick={() => setIsModifyModalOpen(true)}
                     className="inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 transition-colors duration-200"
                   >
                     <Edit3 className="mr-2 h-4 w-4" />
                     Modify
-                  </button>
-                </>
-              ) : (
-                <>
-                  <button
-                    onClick={handleSaveModifications}
-                    className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors duration-200"
-                  >
-                    <Save className="mr-2 h-4 w-4" />
-                    Save Changes
-                  </button>
-
-                  <button
-                    onClick={handleCancelModifications}
-                    className="inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 transition-colors duration-200"
-                  >
-                    <X className="mr-2 h-4 w-4" />
-                    Cancel
                   </button>
                 </>
               )}
@@ -1509,6 +1073,13 @@ const ChallanCard: React.FC<ChallanCardProps> = ({
           )}
         </div>
       </div>
+      {/* ModifyModal */}
+      <ModifyModal
+        challan={challan}
+        isOpen={isModifyModalOpen}
+        onClose={() => setIsModifyModalOpen(false)}
+        onSave={handleSaveModifications}
+      />
     </div>
   );
 };

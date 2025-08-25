@@ -1,404 +1,576 @@
-import React, { useState } from 'react';
-import { X, Plus, Trash2, Save } from 'lucide-react';
-import { Challan } from '../types';
+import React, { useState, useEffect } from 'react';
+import { 
+  X, 
+  Save, 
+  Search, 
+  AlertTriangle, 
+  User, 
+  MapPin, 
+  Car, 
+  ShieldAlert,
+  Calendar,
+  CreditCard,
+  Hash,
+  FileText,
+  CheckCircle,
+  Plus,
+  Trash2
+} from 'lucide-react';
+import { Challan } from '../context/ChallanContext';
+import { apiService } from '../services/api';
 
 interface ModifyModalProps {
   challan: Challan;
   isOpen: boolean;
   onClose: () => void;
-  onSave: (updatedChallan: Challan) => void;
+  onSave: (modifiedChallan: Challan) => void;
 }
 
-interface ViolationOption {
-  code: string;
-  name: string;
+interface ViolationData {
+  sNo: number;
+  violationName: string;
+  section: string;
+  fine: number;
+  penaltyPoints: number;
 }
 
 const ModifyModal: React.FC<ModifyModalProps> = ({ challan, isOpen, onClose, onSave }) => {
-  const [formData, setFormData] = useState({
+  const [modifiedData, setModifiedData] = useState({
     sectorOfficer: { ...challan.sectorOfficer },
     capturedBy: { ...challan.capturedBy },
     jurisdiction: { ...challan.jurisdiction },
     offenceDateTime: { ...challan.offenceDateTime },
     violations: [...challan.violations],
-    driverGender: challan.driverGender,
-    fakePlate: challan.fakePlate,
-    ownerAddress: challan.ownerAddress
+    plateNumber: challan.plateNumber || '',
+    vehicleDetails: challan.vehicleDetails || {
+      make: 'Unknown',
+      model: 'Unknown', 
+      color: 'Unknown',
+      vehicleType: 'Unknown',
+      confidence: { make: 0, model: 0, color: 0 }
+    }
   });
 
-  const [selectedViolationCode, setSelectedViolationCode] = useState('');
+  // Violations and dropdown data
+  const [availableViolations, setAvailableViolations] = useState<ViolationData[]>([]);
+  const [loadingViolations, setLoadingViolations] = useState(false);
+  const [totalFine, setTotalFine] = useState(0);
+  const [violationSearch, setViolationSearch] = useState('');
+  const [sectionSearch, setSectionSearch] = useState('');
+  
+  // Dropdown options
+  const [allSections, setAllSections] = useState<string[]>([]);
+  const [allViolationNames, setAllViolationNames] = useState<string[]>([]);
 
-  const violationOptions: ViolationOption[] = [
-    { code: 'V001', name: 'Signal Jump' },
-    { code: 'V002', name: 'Speed Violation' },
-    { code: 'V003', name: 'No Helmet' },
-    { code: 'V004', name: 'Triple Riding' },
-    { code: 'V005', name: 'Wrong Side Driving' },
-    { code: 'V006', name: 'Mobile Phone Usage' },
-    { code: 'V007', name: 'Seat Belt Violation' },
-    { code: 'V008', name: 'Drunk Driving' },
-    { code: 'V009', name: 'No Parking' },
-    { code: 'V010', name: 'Lane Violation' },
-    { code: 'V011', name: 'Document Missing' },
-    { code: 'V012', name: 'Overloading' },
-    { code: 'V013', name: 'Rash Driving' },
-    { code: 'V014', name: 'No Registration' },
-    { code: 'V015', name: 'Pollution Violation' },
-    { code: 'V016', name: 'Underage Driving' },
-    { code: 'V017', name: 'No Insurance' },
-    { code: 'V018', name: 'Tinted Glass' },
-    { code: 'V019', name: 'Horn Violation' },
-    { code: 'V020', name: 'Footpath Driving' }
-  ];
+  // Vehicle types and other constants
+  const vehicleTypes = ['Car', 'Motorcycle', 'Auto Rickshaw', 'Bus', 'Truck', 'Lorry'];
+  const cadreOptions = ['Inspector', 'Sub Inspector', 'Head Constable', 'Police Constable'];
+  const colorOptions = ['White', 'Black', 'Red', 'Blue', 'Silver', 'Gray', 'Green', 'Yellow', 'Brown', 'Unknown'];
+  const commonMakes = ['Honda', 'Bajaj', 'TVS', 'Hero', 'Yamaha', 'Maruti Suzuki', 'Hyundai', 'Tata', 'Mahindra', 'Toyota', 'Unknown'];
 
-  const handleInputChange = (section: string, field: string, value: string | boolean) => {
-    setFormData(prev => ({
-      ...prev,
-      [section]: {
-        ...prev[section as keyof typeof prev],
-        [field]: value
+  // Load data when modal opens
+  useEffect(() => {
+    if (isOpen) {
+      loadAllViolationsData();
+      loadDropdownOptions();
+    }
+  }, [isOpen, modifiedData.vehicleDetails.vehicleType]);
+
+  const loadAllViolationsData = async () => {
+    try {
+      setLoadingViolations(true);
+      const vehicleType = modifiedData.vehicleDetails.vehicleType || 'Car';
+      const data = await apiService.getViolationsByVehicleType(vehicleType);
+      
+      if (data.success) {
+        setAvailableViolations(data.data);
+        await calculateFine();
       }
-    }));
-  };
-
-  const handleDirectChange = (field: string, value: string | boolean) => {
-    setFormData(prev => ({
-      ...prev,
-      [field]: value
-    }));
-  };
-
-  const addViolation = () => {
-    if (selectedViolationCode) {
-      const selectedOption = violationOptions.find(v => v.code === selectedViolationCode);
-      if (selectedOption && !formData.violations.includes(selectedOption.name)) {
-        setFormData(prev => ({
-          ...prev,
-          violations: [...prev.violations, selectedOption.name]
-        }));
-      }
-      setSelectedViolationCode('');
+    } catch (error) {
+      console.error('Failed to load violations:', error);
+    } finally {
+      setLoadingViolations(false);
     }
   };
 
-  const removeViolation = (index: number) => {
-    setFormData(prev => ({
+  const loadDropdownOptions = async () => {
+    try {
+      const data = await apiService.getViolations();
+      if (data.success) {
+        const violations = data.data;
+        
+        // Extract unique sections and violation names
+        const sections = [...new Set(violations.map((v: any) => v.section))].sort();
+        const violationNames = violations.map((v: any) => v.violationName).sort();
+        
+        setAllSections(sections);
+        setAllViolationNames(violationNames);
+      }
+    } catch (error) {
+      console.error('Failed to load dropdown options:', error);
+    }
+  };
+
+  const calculateFine = async () => {
+    try {
+      const data = await apiService.calculateFine(
+        modifiedData.violations,
+        modifiedData.vehicleDetails.vehicleType || 'Car'
+      );
+      
+      if (data.success) {
+        setTotalFine(data.data.totalFine);
+      }
+    } catch (error) {
+      console.error('Failed to calculate fine:', error);
+    }
+  };
+
+  const handleFieldChange = (section: string, field: string, value: any) => {
+    if (section === 'direct') {
+      setModifiedData(prev => ({
+        ...prev,
+        [field]: value
+      }));
+    } else {
+      setModifiedData(prev => ({
+        ...prev,
+        [section]: {
+          ...prev[section as keyof typeof prev],
+          [field]: value
+        }
+      }));
+    }
+
+    // Reload violations if vehicle type changes
+    if (section === 'vehicleDetails' && field === 'vehicleType') {
+      setTimeout(loadAllViolationsData, 100);
+    }
+  };
+
+  const handleViolationAdd = (violationName: string) => {
+    if (!modifiedData.violations.includes(violationName)) {
+      setModifiedData(prev => ({
+        ...prev,
+        violations: [...prev.violations, violationName]
+      }));
+      setTimeout(calculateFine, 100);
+    }
+  };
+
+  const handleViolationRemove = (index: number) => {
+    setModifiedData(prev => ({
       ...prev,
       violations: prev.violations.filter((_, i) => i !== index)
     }));
-  };
-
-  const getViolationCode = (violationName: string): string => {
-    const violation = violationOptions.find(v => v.name === violationName);
-    return violation ? violation.code : 'N/A';
+    setTimeout(calculateFine, 100);
   };
 
   const handleSave = () => {
-    const updatedChallan: Challan = {
+    const updatedChallan = {
       ...challan,
-      ...formData
+      ...modifiedData
     };
     onSave(updatedChallan);
     onClose();
   };
 
+  // Filter functions for dropdowns
+  const filteredViolations = availableViolations.filter(violation => 
+    violation.violationName.toLowerCase().includes(violationSearch.toLowerCase()) ||
+    violation.section.toLowerCase().includes(violationSearch.toLowerCase())
+  );
+
+  const filteredSections = allSections.filter(section =>
+    section.toLowerCase().includes(sectionSearch.toLowerCase())
+  );
+
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 bg-black bg-opacity-50 flex items-center justify-center p-4">
-      <div className="bg-white rounded-lg shadow-xl max-w-4xl w-full max-h-[90vh] overflow-y-auto">
-        <div className="flex items-center justify-between p-6 border-b border-gray-200">
-          <h2 className="text-xl font-semibold text-gray-900">Modify Challan {challan.id}</h2>
-          <button
-            onClick={onClose}
-            className="p-2 hover:bg-gray-100 rounded-md transition-colors duration-200"
-          >
-            <X className="h-5 w-5" />
-          </button>
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+      <div className="bg-white rounded-2xl shadow-2xl max-w-7xl w-full max-h-[90vh] overflow-hidden">
+        
+        {/* Header */}
+        <div className="bg-gradient-to-r from-blue-600 to-indigo-700 px-6 py-4 flex items-center justify-between">
+          <div className="flex items-center space-x-3">
+            <FileText className="h-6 w-6 text-white" />
+            <h2 className="text-xl font-bold text-white">Modify Challan Details</h2>
+          </div>
+          <div className="flex items-center space-x-6">
+            <div className="text-right text-white">
+              <p className="text-sm opacity-90">Total Fine Amount</p>
+              <p className="text-2xl font-bold">₹{totalFine.toLocaleString()}</p>
+            </div>
+            <button
+              onClick={onClose}
+              className="text-white hover:bg-white hover:bg-opacity-20 p-2 rounded-lg transition-colors"
+            >
+              <X className="h-5 w-5" />
+            </button>
+          </div>
         </div>
 
-        <div className="p-6 space-y-6">
-          {/* Vehicle Details */}
-          <div className="space-y-4">
-            <h3 className="text-lg font-medium text-gray-900">Vehicle Details</h3>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Plate Number
-                </label>
-                <input
-                  type="text"
-                  value={challan.plateNumber || 'Not Available'}
-                  disabled
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md bg-gray-100 text-gray-500 cursor-not-allowed"
-                />
-                <p className="text-xs text-gray-500 mt-1">Plate number cannot be modified</p>
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Driver Gender
-                </label>
-                <select
-                  value={formData.driverGender}
-                  onChange={(e) => handleDirectChange('driverGender', e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                >
-                  <option value="Male">Male</option>
-                  <option value="Female">Female</option>
-                  <option value="Unknown">Unknown</option>
-                </select>
-              </div>
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Owner Address
-              </label>
-              <textarea
-                value={formData.ownerAddress}
-                onChange={(e) => handleDirectChange('ownerAddress', e.target.value)}
-                rows={3}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-              />
-            </div>
-            <div className="flex items-center">
-              <input
-                type="checkbox"
-                id="fakePlate"
-                checked={formData.fakePlate}
-                onChange={(e) => handleDirectChange('fakePlate', e.target.checked)}
-                className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
-              />
-              <label htmlFor="fakePlate" className="ml-2 block text-sm text-gray-900">
-                Fake/No Plate
-              </label>
-            </div>
-          </div>
-
-          {/* Officer Details */}
-          <div className="space-y-4">
-            <h3 className="text-lg font-medium text-gray-900">Sector Officer Details</h3>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  PS Name
-                </label>
-                <input
-                  type="text"
-                  value={formData.sectorOfficer.psName}
-                  onChange={(e) => handleInputChange('sectorOfficer', 'psName', e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Cadre
-                </label>
-                <select
-                  value={formData.sectorOfficer.cadre}
-                  onChange={(e) => handleInputChange('sectorOfficer', 'cadre', e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                >
-                  <option value="Inspector">Inspector</option>
-                  <option value="Sub Inspector">Sub Inspector</option>
-                  <option value="Head Constable">Head Constable</option>
-                  <option value="Constable">Constable</option>
-                </select>
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Name
-                </label>
-                <input
-                  type="text"
-                  value={formData.sectorOfficer.name}
-                  onChange={(e) => handleInputChange('sectorOfficer', 'name', e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                />
-              </div>
-            </div>
-          </div>
-
-          {/* Captured By Details */}
-          <div className="space-y-4">
-            <h3 className="text-lg font-medium text-gray-900">Image Captured By</h3>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Cadre
-                </label>
-                <select
-                  value={formData.capturedBy.cadre}
-                  onChange={(e) => handleInputChange('capturedBy', 'cadre', e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                >
-                  <option value="Inspector">Inspector</option>
-                  <option value="Sub Inspector">Sub Inspector</option>
-                  <option value="Head Constable">Head Constable</option>
-                  <option value="Constable">Constable</option>
-                </select>
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Name
-                </label>
-                <input
-                  type="text"
-                  value={formData.capturedBy.name}
-                  onChange={(e) => handleInputChange('capturedBy', 'name', e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                />
-              </div>
-            </div>
-          </div>
-
-          {/* Jurisdiction */}
-          <div className="space-y-4">
-            <h3 className="text-lg font-medium text-gray-900">PS Jurisdiction</h3>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  PS Name
-                </label>
-                <input
-                  type="text"
-                  value={formData.jurisdiction.psName}
-                  onChange={(e) => handleInputChange('jurisdiction', 'psName', e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Point Name
-                </label>
-                <input
-                  type="text"
-                  value={formData.jurisdiction.pointName}
-                  onChange={(e) => handleInputChange('jurisdiction', 'pointName', e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                />
-              </div>
-            </div>
-          </div>
-
-          {/* Offence Date & Time */}
-          <div className="space-y-4">
-            <h3 className="text-lg font-medium text-gray-900">Offence Date & Time</h3>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Date
-                </label>
-                <input
-                  type="text"
-                  value={formData.offenceDateTime.date}
-                  onChange={(e) => handleInputChange('offenceDateTime', 'date', e.target.value)}
-                  placeholder="DD-MM-YYYY"
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Time
-                </label>
-                <input
-                  type="text"
-                  value={formData.offenceDateTime.time}
-                  onChange={(e) => handleInputChange('offenceDateTime', 'time', e.target.value)}
-                  placeholder="HH:MM"
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                />
-              </div>
-            </div>
-          </div>
-
-          {/* Violations */}
-          <div className="space-y-4">
-            <h3 className="text-lg font-medium text-gray-900">Violations</h3>
+        {/* Content */}
+        <div className="overflow-y-auto max-h-[calc(90vh-140px)]">
+          <div className="p-6 grid grid-cols-1 lg:grid-cols-3 gap-6">
             
-            {/* Current Violations */}
-            <div className="space-y-2">
-              <label className="block text-sm font-medium text-gray-700">
-                Current Violations
-              </label>
-              <div className="space-y-2">
-                {formData.violations.map((violation, index) => (
-                  <div
-                    key={index}
-                    className="flex items-center justify-between p-3 bg-red-50 border border-red-200 rounded-lg"
-                  >
-                    <div className="flex items-center space-x-3">
-                      <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800">
-                        {getViolationCode(violation)}
-                      </span>
-                      <span className="text-sm font-medium text-gray-900">{violation}</span>
-                    </div>
-                    <button
-                      onClick={() => removeViolation(index)}
-                      className="p-1 hover:bg-red-100 rounded-md transition-colors duration-200"
-                    >
-                      <Trash2 className="h-4 w-4 text-red-600" />
-                    </button>
+            {/* Left Column - Officer & Jurisdiction */}
+            <div className="space-y-6">
+              
+              {/* Officer Details */}
+              <div className="bg-blue-50 rounded-xl p-5 border border-blue-200">
+                <h3 className="text-lg font-semibold text-blue-900 mb-4 flex items-center">
+                  <User className="h-5 w-5 mr-2" />
+                  Officer Details
+                </h3>
+                <div className="space-y-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">PS Name</label>
+                    <input
+                      type="text"
+                      value={modifiedData.sectorOfficer.psName}
+                      onChange={(e) => handleFieldChange('sectorOfficer', 'psName', e.target.value)}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                      placeholder="Enter PS Name"
+                    />
                   </div>
-                ))}
-                {formData.violations.length === 0 && (
-                  <p className="text-sm text-gray-500 italic">No violations added</p>
-                )}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Cadre</label>
+                    <select
+                      value={modifiedData.sectorOfficer.cadre}
+                      onChange={(e) => handleFieldChange('sectorOfficer', 'cadre', e.target.value)}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    >
+                      {cadreOptions.map(cadre => (
+                        <option key={cadre} value={cadre}>{cadre}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Officer Name</label>
+                    <input
+                      type="text"
+                      value={modifiedData.sectorOfficer.name}
+                      onChange={(e) => handleFieldChange('sectorOfficer', 'name', e.target.value)}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                      placeholder="Enter Officer Name"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* Jurisdiction */}
+              <div className="bg-green-50 rounded-xl p-5 border border-green-200">
+                <h3 className="text-lg font-semibold text-green-900 mb-4 flex items-center">
+                  <MapPin className="h-5 w-5 mr-2" />
+                  Jurisdiction & Location
+                </h3>
+                <div className="space-y-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">PS Name</label>
+                    <input
+                      type="text"
+                      value={modifiedData.jurisdiction.psName}
+                      onChange={(e) => handleFieldChange('jurisdiction', 'psName', e.target.value)}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500"
+                      placeholder="Enter PS Name"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Point Name</label>
+                    <input
+                      type="text"
+                      value={modifiedData.jurisdiction.pointName}
+                      onChange={(e) => handleFieldChange('jurisdiction', 'pointName', e.target.value)}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500"
+                      placeholder="Enter Point Name"
+                    />
+                  </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">Date</label>
+                      <input
+                        type="text"
+                        value={modifiedData.offenceDateTime.date}
+                        onChange={(e) => handleFieldChange('offenceDateTime', 'date', e.target.value)}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500"
+                        placeholder="DD/MM/YYYY"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">Time</label>
+                      <input
+                        type="text"
+                        value={modifiedData.offenceDateTime.time}
+                        onChange={(e) => handleFieldChange('offenceDateTime', 'time', e.target.value)}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500"
+                        placeholder="HH:MM"
+                      />
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Number Plate */}
+              <div className="bg-yellow-50 rounded-xl p-5 border border-yellow-200">
+                <h3 className="text-lg font-semibold text-yellow-900 mb-4 flex items-center">
+                  <Hash className="h-5 w-5 mr-2" />
+                  Number Plate
+                </h3>
+                <input
+                  type="text"
+                  value={modifiedData.plateNumber}
+                  onChange={(e) => handleFieldChange('direct', 'plateNumber', e.target.value.toUpperCase())}
+                  className="w-full px-4 py-3 text-lg font-mono border border-gray-300 rounded-lg focus:ring-2 focus:ring-yellow-500 focus:border-yellow-500"
+                  placeholder="Enter plate number"
+                  style={{ letterSpacing: '2px' }}
+                />
+                <p className="text-sm text-gray-600 mt-2">Format: TS07EA1234</p>
               </div>
             </div>
 
-            {/* Add New Violation */}
-            <div className="space-y-3">
-              <label className="block text-sm font-medium text-gray-700">
-                Add Violation
-              </label>
-              <div className="flex space-x-3">
-                <div className="flex-1">
-                  <select
-                    value={selectedViolationCode}
-                    onChange={(e) => setSelectedViolationCode(e.target.value)}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                  >
-                    <option value="">Select a violation...</option>
-                    {violationOptions
-                      .filter(option => !formData.violations.includes(option.name))
-                      .map((violation) => (
-                        <option key={violation.code} value={violation.code}>
-                          {violation.code} - {violation.name}
-                        </option>
+            {/* Middle Column - Vehicle Details */}
+            <div className="space-y-6">
+              
+              <div className="bg-purple-50 rounded-xl p-5 border border-purple-200">
+                <h3 className="text-lg font-semibold text-purple-900 mb-4 flex items-center">
+                  <Car className="h-5 w-5 mr-2" />
+                  Vehicle Information
+                </h3>
+                <div className="space-y-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Vehicle Type</label>
+                    <select
+                      value={modifiedData.vehicleDetails.vehicleType as string}
+                      onChange={(e) => handleFieldChange('vehicleDetails', 'vehicleType', e.target.value)}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
+                    >
+                      {vehicleTypes.map(type => (
+                        <option key={type} value={type}>{type}</option>
                       ))}
-                  </select>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Make</label>
+                    <select
+                      value={modifiedData.vehicleDetails.make as string}
+                      onChange={(e) => handleFieldChange('vehicleDetails', 'make', e.target.value)}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
+                    >
+                      {commonMakes.map(make => (
+                        <option key={make} value={make}>{make}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Model</label>
+                    <input
+                      type="text"
+                      value={modifiedData.vehicleDetails.model as string}
+                      onChange={(e) => handleFieldChange('vehicleDetails', 'model', e.target.value)}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
+                      placeholder="Enter model"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Color</label>
+                    <select
+                      value={modifiedData.vehicleDetails.color as string}
+                      onChange={(e) => handleFieldChange('vehicleDetails', 'color', e.target.value)}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
+                    >
+                      {colorOptions.map(color => (
+                        <option key={color} value={color}>{color}</option>
+                      ))}
+                    </select>
+                  </div>
                 </div>
-                <button
-                  onClick={addViolation}
-                  disabled={!selectedViolationCode}
-                  className="inline-flex items-center px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors duration-200"
-                >
-                  <Plus className="h-4 w-4 mr-1" />
-                  Add
-                </button>
               </div>
-              <p className="text-xs text-gray-500">
-                Select violations from the dropdown. Each violation has a unique code for tracking.
-              </p>
+
+              {/* Section Codes */}
+              <div className="bg-orange-50 rounded-xl p-5 border border-orange-200">
+                <h3 className="text-lg font-semibold text-orange-900 mb-4 flex items-center">
+                  <CreditCard className="h-5 w-5 mr-2" />
+                  Section Codes
+                </h3>
+                <div className="space-y-3">
+                  <div className="relative">
+                    <input
+                      type="text"
+                      placeholder="Search section codes..."
+                      value={sectionSearch}
+                      onChange={(e) => setSectionSearch(e.target.value)}
+                      className="w-full px-4 py-2 pl-10 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-orange-500"
+                    />
+                    <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
+                  </div>
+                  <div className="max-h-40 overflow-y-auto border border-gray-200 rounded-lg bg-white">
+                    {filteredSections.map((section, index) => (
+                      <div 
+                        key={index}
+                        className="px-3 py-2 hover:bg-orange-50 cursor-pointer border-b border-gray-100 last:border-b-0 text-sm"
+                        onClick={() => {
+                          // You can implement section selection logic here
+                          console.log('Selected section:', section);
+                        }}
+                      >
+                        {section}
+                      </div>
+                    ))}
+                  </div>
+                  <p className="text-xs text-gray-600">
+                    Showing {filteredSections.length} of {allSections.length} sections
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            {/* Right Column - Violations */}
+            <div className="space-y-6">
+              
+              <div className="bg-red-50 rounded-xl p-5 border border-red-200">
+                <h3 className="text-lg font-semibold text-red-900 mb-4 flex items-center">
+                  <ShieldAlert className="h-5 w-5 mr-2" />
+                  Traffic Violations
+                </h3>
+
+                {/* Current Violations */}
+                {modifiedData.violations.length > 0 && (
+                  <div className="mb-6">
+                    <div className="flex items-center justify-between mb-3">
+                      <h4 className="text-sm font-medium text-gray-700">
+                        Selected Violations ({modifiedData.violations.length})
+                      </h4>
+                      <button
+                        onClick={() => setModifiedData(prev => ({ ...prev, violations: [] }))}
+                        className="text-red-600 hover:text-red-800 text-sm flex items-center"
+                      >
+                        <Trash2 className="h-4 w-4 mr-1" />
+                        Clear All
+                      </button>
+                    </div>
+                    <div className="space-y-2 max-h-32 overflow-y-auto">
+                      {modifiedData.violations.map((violation, index) => {
+                        const violationData = availableViolations.find(v => v.violationName === violation);
+                        return (
+                          <div key={index} className="bg-red-100 p-3 rounded-lg border border-red-200 flex items-center justify-between">
+                            <div className="flex-1">
+                              <p className="text-sm font-medium text-red-900">{violation}</p>
+                              {violationData && (
+                                <div className="flex items-center space-x-3 text-xs text-red-700 mt-1">
+                                  <span className="bg-red-200 px-2 py-1 rounded">{violationData.section}</span>
+                                  <span className="font-semibold">₹{violationData.fine}</span>
+                                </div>
+                              )}
+                            </div>
+                            <button
+                              onClick={() => handleViolationRemove(index)}
+                              className="ml-2 p-1 text-red-600 hover:text-red-800 hover:bg-red-200 rounded-md transition-colors"
+                            >
+                              <X className="h-4 w-4" />
+                            </button>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+
+                {/* Add Violations */}
+                <div>
+                  <h4 className="text-sm font-medium text-gray-700 mb-3">Add Violations</h4>
+                  
+                  {/* Search Box */}
+                  <div className="relative mb-4">
+                    <input
+                      type="text"
+                      placeholder="Search violations or section codes..."
+                      value={violationSearch}
+                      onChange={(e) => setViolationSearch(e.target.value)}
+                      className="w-full px-4 py-2 pl-10 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-red-500"
+                    />
+                    <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
+                  </div>
+
+                  {/* Violations List */}
+                  {loadingViolations ? (
+                    <div className="text-center py-8">
+                      <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-red-600 mx-auto"></div>
+                      <p className="text-sm text-gray-500 mt-2">Loading violations...</p>
+                    </div>
+                  ) : (
+                    <div className="max-h-64 overflow-y-auto space-y-2 border border-gray-200 rounded-lg p-2 bg-white">
+                      {filteredViolations.map((violation, index) => (
+                        <div
+                          key={index}
+                          className={`p-3 rounded-lg border cursor-pointer transition-all ${
+                            modifiedData.violations.includes(violation.violationName)
+                              ? 'bg-gray-100 border-gray-300 opacity-50 cursor-not-allowed'
+                              : 'bg-white border-gray-200 hover:bg-red-50 hover:border-red-300'
+                          }`}
+                          onClick={() => {
+                            if (!modifiedData.violations.includes(violation.violationName)) {
+                              handleViolationAdd(violation.violationName);
+                            }
+                          }}
+                        >
+                          <div className="flex items-center justify-between">
+                            <div className="flex-1">
+                              <p className="text-sm font-medium text-gray-900">{violation.violationName}</p>
+                              <div className="flex items-center space-x-3 text-xs text-gray-600 mt-1">
+                                <span className="bg-gray-100 px-2 py-1 rounded">{violation.section}</span>
+                                <span className="font-semibold text-green-600">₹{violation.fine}</span>
+                                <span className="text-orange-600">Points: {violation.penaltyPoints}</span>
+                              </div>
+                            </div>
+                            {modifiedData.violations.includes(violation.violationName) ? (
+                              <CheckCircle className="h-5 w-5 text-green-600" />
+                            ) : (
+                              <Plus className="h-5 w-5 text-gray-400" />
+                            )}
+                          </div>
+                        </div>
+                      ))}
+                      {filteredViolations.length === 0 && (
+                        <div className="text-center py-4 text-gray-500">
+                          <AlertTriangle className="h-8 w-8 mx-auto mb-2" />
+                          <p>No violations found for "{violationSearch}"</p>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                  
+                  <p className="text-xs text-gray-600 mt-2">
+                    Showing {filteredViolations.length} violations for {modifiedData.vehicleDetails.vehicleType}
+                  </p>
+                </div>
+              </div>
             </div>
           </div>
         </div>
 
         {/* Footer */}
-        <div className="flex justify-end space-x-3 p-6 border-t border-gray-200">
-          <button
-            onClick={onClose}
-            className="px-4 py-2 border border-gray-300 text-gray-700 rounded-md hover:bg-gray-50 transition-colors duration-200"
-          >
-            Cancel
-          </button>
-          <button
-            onClick={handleSave}
-            className="inline-flex items-center px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors duration-200"
-          >
-            <Save className="mr-2 h-4 w-4" />
-            Save Changes
-          </button>
+        <div className="bg-gray-50 px-6 py-4 flex items-center justify-between border-t">
+          <div className="flex items-center space-x-4 text-sm text-gray-600">
+            <span>Violations: {modifiedData.violations.length}</span>
+            <span>Total Fine: ₹{totalFine.toLocaleString()}</span>
+          </div>
+          <div className="flex items-center space-x-3">
+            <button
+              onClick={onClose}
+              className="px-6 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
+            >
+              Cancel
+            </button>
+            <button
+              onClick={handleSave}
+              className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors flex items-center"
+            >
+              <Save className="h-4 w-4 mr-2" />
+              Save Changes
+            </button>
+          </div>
         </div>
       </div>
     </div>
