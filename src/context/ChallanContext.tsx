@@ -9,7 +9,7 @@ export interface Challan {
   originalFile: File;
   preview: string;
   image: string;
-  status: 'processing' | 'pending-review' | 'approved' | 'rejected';
+  status: 'processing' | 'pending-review' | 'approved' | 'rejected' | 'violation-not-tagged';
   timestamp: string;
   plateNumber?: string;
   violations: string[];
@@ -185,9 +185,25 @@ export const ChallanProvider: React.FC<ChallanProviderProps> = ({ children }) =>
         const violations = violationAnalysis?.violation_types_found || [];
         const detectedViolationCount = violationAnalysis?.detected_violation_count || 0;
 
-        // ALL successfully analyzed images go to pending-review
-        // No auto-approval - everything requires manual review
-        const newStatus: Challan['status'] = 'pending-review';
+        // Determine status based on violation detection
+        // Check multiple sources for violation detection
+        const step2ViolationStatus = step2Data?.status;
+        const step2ViolationCount = step2Data?.violations_detected?.length || 0;
+        const step6ViolationCount = detectedViolationCount;
+        
+        let newStatus: Challan['status'];
+        
+        // If no violations are detected by AI system, mark as violation-not-tagged
+        if ((step2ViolationStatus === 'NO_VIOLATION' || step2ViolationCount === 0) && 
+            step6ViolationCount === 0 && 
+            violations.length === 0) {
+          newStatus = 'violation-not-tagged';
+          console.log('🚫 No violations detected by AI - setting status to violation-not-tagged');
+        } else {
+          // Violations detected - send to pending review
+          newStatus = 'pending-review';
+          console.log('⚠️ Violations detected - sending to pending review');
+        }
 
         // Extract vehicle comparison from Step 5
         const vehicleComparison = step5Data?.comparison_result;
@@ -295,9 +311,17 @@ export const ChallanProvider: React.FC<ChallanProviderProps> = ({ children }) =>
         const violations = summary.violation_types || [];
         const detectedViolationCount = summary.violations_found || 0;
 
-        // ALL successfully analyzed images go to pending-review
-        // No auto-approval - everything requires manual review
-        const newStatus: Challan['status'] = 'pending-review';
+        // Determine status based on violation detection (legacy workflow)
+        let newStatus: Challan['status'];
+        
+        // If no violations are detected, mark as violation-not-tagged
+        if (detectedViolationCount === 0 && violations.length === 0) {
+          newStatus = 'violation-not-tagged';
+          console.log('🚫 Legacy workflow: No violations detected - setting status to violation-not-tagged');
+        } else {
+          newStatus = 'pending-review';
+          console.log('⚠️ Legacy workflow: Violations detected - sending to pending review');
+        }
 
         // Create vehicle matches from Step 5 comparison data
         const vehicleMatches = summary.comparison_result ? 

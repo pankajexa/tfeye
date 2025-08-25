@@ -228,7 +228,7 @@ export interface Challan {
   image: string;
   timestamp: string;
   plateNumber?: string;
-  status: 'processing' | 'pending-review' | 'approved' | 'rejected';
+  status: 'processing' | 'pending-review' | 'approved' | 'rejected' | 'violation-not-tagged';
   rejectionReason?: string;
   sectorOfficer: Officer;
   capturedBy: Officer;
@@ -289,5 +289,5 @@ export interface Challan {
   reviewTimestamp?: string;
 }
 
-export type TabType = 'processing' | 'pending-review' | 'approved' | 'rejected';
+export type TabType = 'processing' | 'pending-review' | 'approved' | 'rejected' | 'violation-not-tagged';
 export type RejectedSubTab = 'system-rejected' | 'operator-rejected' | 'rta-mismatch';

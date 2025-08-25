@@ -4,6 +4,7 @@ import ProcessingTab from './ProcessingTab';
 import PendingReviewTab from './PendingReviewTab';
 import ApprovedTab from './ApprovedTab';
 import RejectedTab from './RejectedTab';
+import ViolationNotTaggedTab from './ViolationNotTaggedTab';
 
 const ReviewChallans: React.FC = () => {
   const [activeTab, setActiveTab] = useState<TabType>('pending-review');
@@ -11,6 +12,7 @@ const ReviewChallans: React.FC = () => {
 
   const tabs = [
     { id: 'pending-review' as TabType, label: 'Pending Review' },
+    { id: 'violation-not-tagged' as TabType, label: 'Violation Not Tagged' },
     { id: 'approved' as TabType, label: 'Approved' },
     { id: 'rejected' as TabType, label: 'Rejected' },
     { id: 'processing' as TabType, label: 'Processing' }
@@ -72,6 +74,7 @@ const ReviewChallans: React.FC = () => {
 
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
         {activeTab === 'pending-review' && <PendingReviewTab />}
+        {activeTab === 'violation-not-tagged' && <ViolationNotTaggedTab />}
         {activeTab === 'approved' && <ApprovedTab />}
         {activeTab === 'rejected' && <RejectedTab activeSubTab={rejectedSubTab} />}
         {activeTab === 'processing' && <ProcessingTab />}
