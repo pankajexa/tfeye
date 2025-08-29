@@ -1094,6 +1094,10 @@ Perform detailed visual analysis of ONLY the target vehicle described above.
       }
 
       // STEP 6: Create violation result for frontend compatibility
+      // Note: This will be updated after we determine which violations are specific
+      const rawViolations = step2Result.data.violation_types || [];
+      const rawViolationCount = step2Result.data.violation_count || 0;
+      
       const step6Result = {
         success: true,
         step: 6,
@@ -1102,19 +1106,19 @@ Perform detailed visual analysis of ONLY the target vehicle described above.
           violation_analysis: {
             violations_detected: step2Result.data.violations_detected || [],
             overall_assessment: {
-              total_violations: step2Result.data.violation_count || 0,
-              violation_summary: step2Result.data.violation_count > 0 ? `Violations detected: ${step2Result.data.violation_types.join(', ')}` : 'No violations detected',
+              total_violations: rawViolationCount,
+              violation_summary: rawViolationCount > 0 ? `AI detected: ${rawViolations.join(', ')}` : 'No violations detected by AI',
               image_clarity_for_detection: 'good',
               analysis_confidence: 0.9,
-              analysis_method: 'simplified_violation_first_analysis'
+              analysis_method: 'specific_violation_analysis'
             },
             enforcement_recommendation: {
-              action: step2Result.data.violation_count > 0 ? 'ISSUE_CHALLAN' : 'NO_ACTION',
-              priority: step2Result.data.violation_count > 1 ? 'High' : step2Result.data.violation_count === 1 ? 'Medium' : 'Low',
-              notes: `License plate extracted from violating vehicle. Vehicle: ${step2Result.data.primary_violating_vehicle?.description || 'N/A'}`
+              action: 'ANALYSIS_COMPLETE', // Will be determined in final result
+              priority: 'Medium',
+              notes: `Complete analysis performed. License plate: ${step3Result.data.license_plate || 'Not extracted'}`
             },
-            detected_violation_count: step2Result.data.violation_count || 0,
-            violation_types_found: step2Result.data.violation_types || [] // This now contains deduplicated violations
+            detected_violation_count: rawViolationCount,
+            violation_types_found: rawViolations // Raw violations detected by AI
           },
           detection_method: 'Simplified Violation-First Analysis',
           detection_possible: true,
@@ -1131,22 +1135,49 @@ Perform detailed visual analysis of ONLY the target vehicle described above.
       };
       analysis.results.step6 = step6Result;
 
-      // FINAL RESULT
+      // FINAL RESULT - Check if specific violations (Cell Phone, Triple Riding, No Helmet) were found
       analysis.success = true;
-      analysis.final_result = {
-        action: 'CHALLAN_READY',
-        violation_types: step2Result.data.violation_types,
-        license_plate: step3Result.data.license_plate,
-        vehicle_owner: step4Result.success ? (step4Result.data.rta_data.ownerName || 'Owner information not available') : 'RTA data not found',
-        vehicle_details: step4Result.success ? step4Result.data.rta_data : null,
-        vehicle_match: step5Result.success ? step5Result.data.comparison_result?.overall_verdict : 'Unknown',
-        recommendation: 'All analysis complete - ready to generate challan'
-      };
-
-      console.log('\n🎉 COMPLETE ANALYSIS FINISHED SUCCESSFULLY!');
-      console.log(`📋 Violations: ${step2Result.data.violation_types.join(', ')}`);
-      console.log(`🎯 License Plate: ${step3Result.data.license_plate}`);
-      console.log(`👤 Vehicle Owner: ${analysis.final_result.vehicle_owner}`);
+      
+      const detectedViolations = step2Result.data.violation_types || [];
+      const validSpecificViolations = detectedViolations.filter(violation => 
+        ['No Helmet', 'Cell Phone Driving', 'Triple Riding'].includes(violation)
+      );
+      
+      if (validSpecificViolations.length > 0) {
+        // Has specific violations - ready for challan
+        analysis.final_result = {
+          action: 'CHALLAN_READY',
+          violation_types: validSpecificViolations,
+          license_plate: step3Result.data.license_plate,
+          vehicle_owner: step4Result.success ? (step4Result.data.rta_data.ownerName || 'Owner information not available') : 'RTA data not found',
+          vehicle_details: step4Result.success ? step4Result.data.rta_data : null,
+          vehicle_match: step5Result.success ? step5Result.data.comparison_result?.overall_verdict : 'Unknown',
+          recommendation: 'Analysis complete - violations found, ready to generate challan'
+        };
+        
+        console.log('\n🎉 COMPLETE ANALYSIS FINISHED - SPECIFIC VIOLATIONS FOUND!');
+        console.log(`📋 Specific Violations: ${validSpecificViolations.join(', ')}`);
+        console.log(`🎯 License Plate: ${step3Result.data.license_plate}`);
+        console.log(`👤 Vehicle Owner: ${analysis.final_result.vehicle_owner}`);
+      } else {
+        // No specific violations detected - send to "Violation Not Tagged"
+        analysis.final_result = {
+          action: 'NO_VIOLATIONS_DETECTED',
+          violation_types: [],
+          license_plate: step3Result.data.license_plate,
+          vehicle_owner: step4Result.success ? (step4Result.data.rta_data.ownerName || 'Owner information not available') : 'RTA data not found',
+          vehicle_details: step4Result.success ? step4Result.data.rta_data : null,
+          vehicle_match: step5Result.success ? step5Result.data.comparison_result?.overall_verdict : 'Unknown',
+          recommendation: 'Analysis complete - no specific violations found, ready for manual review'
+        };
+        
+        console.log('\n✅ COMPLETE ANALYSIS FINISHED - NO SPECIFIC VIOLATIONS!');
+        console.log('📋 Result: No specific violations found (Cell Phone, Triple Riding, No Helmet)');
+        console.log(`🔍 AI detected violations: ${detectedViolations.join(', ') || 'None'}`);
+        console.log(`🎯 License Plate: ${step3Result.data.license_plate}`);
+        console.log(`👤 Vehicle Owner: ${analysis.final_result.vehicle_owner}`);
+        console.log('🏷️ Image will be sent to "Violation Not Tagged" for manual review');
+      }
       
       // Add frontend compatibility fields
       analysis.step = 6; // Indicate completed workflow
@@ -1156,8 +1187,13 @@ Perform detailed visual analysis of ONLY the target vehicle described above.
       analysis.error = null; // No error message
       
       // CRITICAL FIX: Add missing TypeScript interface fields
-      analysis.recommendation = 'All analysis complete - ready to generate challan';
-      analysis.next_steps = ['review_results', 'generate_challan'];
+      if (validSpecificViolations.length > 0) {
+        analysis.recommendation = 'Analysis complete - violations found, ready to generate challan';
+        analysis.next_steps = ['review_results', 'generate_challan'];
+      } else {
+        analysis.recommendation = 'Analysis complete - no specific violations found, ready for manual review';
+        analysis.next_steps = ['manual_review', 'violation_not_tagged_tab'];
+      }
       
       return analysis;
 

@@ -190,19 +190,23 @@ export const ChallanProvider: React.FC<ChallanProviderProps> = ({ children }) =>
         const step2ViolationStatus = step2Data?.status;
         const step2ViolationCount = step2Data?.violations_detected?.length || 0;
         const step6ViolationCount = detectedViolationCount;
+        const finalResultAction = stepAnalysisResponse.final_result?.action;
         
         let newStatus: Challan['status'];
         
-        // If no violations are detected by AI system, mark as violation-not-tagged
-        if ((step2ViolationStatus === 'NO_VIOLATION' || step2ViolationCount === 0) && 
-            step6ViolationCount === 0 && 
-            violations.length === 0) {
+        // Check if this is marked as no violations detected by the backend
+        if (finalResultAction === 'NO_VIOLATIONS_DETECTED' || 
+            ((step2ViolationStatus === 'NO_VIOLATION' || step2ViolationCount === 0) && 
+             step6ViolationCount === 0 && 
+             violations.length === 0)) {
           newStatus = 'violation-not-tagged';
           console.log('🚫 No violations detected by AI - setting status to violation-not-tagged');
+          console.log('📋 Final result action:', finalResultAction);
         } else {
           // Violations detected - send to pending review
           newStatus = 'pending-review';
           console.log('⚠️ Violations detected - sending to pending review');
+          console.log('📋 Final result action:', finalResultAction);
         }
 
         // Extract vehicle comparison from Step 5
