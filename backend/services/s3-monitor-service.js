@@ -76,11 +76,15 @@ class S3MonitorService {
 
   async checkForNewImages() {
     if (!this.isConfigured()) {
+      console.log('❌ S3 not configured - cannot check for new images');
       return [];
     }
 
     try {
       console.log('🔍 Checking S3 for new images...');
+      console.log(`📂 Bucket: ${this.uploadBucket}`);
+      console.log(`📁 Prefix: uploads/`);
+      console.log(`⏰ Last check time: ${this.lastCheckTime.toISOString()}`);
       
       // List objects in the uploads/ prefix, modified after lastCheckTime
       const params = {
@@ -93,12 +97,28 @@ class S3MonitorService {
       const currentTime = new Date();
       const newImages = [];
 
+      console.log(`📊 Total objects found in bucket: ${data.Contents ? data.Contents.length : 0}`);
+      
       if (data.Contents && data.Contents.length > 0) {
+        console.log('📋 Recent objects in bucket:');
+        data.Contents.forEach((obj, index) => {
+          if (index < 5) { // Show first 5 for debugging
+            console.log(`  ${index + 1}. ${obj.Key} - Modified: ${obj.LastModified.toISOString()} - Size: ${obj.Size}`);
+          }
+        });
+        
         // Filter images uploaded after lastCheckTime
         const recentImages = data.Contents.filter(obj => {
-          return obj.LastModified > this.lastCheckTime && 
-                 obj.Key.endsWith('.jpg') &&
-                 obj.Size > 0; // Ensure file has content
+          const isAfterLastCheck = obj.LastModified > this.lastCheckTime;
+          const isJpg = obj.Key.endsWith('.jpg');
+          const hasContent = obj.Size > 0;
+          
+          console.log(`🔍 Checking ${obj.Key}:`);
+          console.log(`  - After last check (${obj.LastModified} > ${this.lastCheckTime}): ${isAfterLastCheck}`);
+          console.log(`  - Is JPG: ${isJpg}`);
+          console.log(`  - Has content: ${hasContent}`);
+          
+          return isAfterLastCheck && isJpg && hasContent;
         });
 
         console.log(`📊 Found ${recentImages.length} new images since last check`);

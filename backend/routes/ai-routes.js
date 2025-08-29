@@ -1570,4 +1570,65 @@ router.delete('/api/queue/clear', (req, res) => {
   }
 });
 
+// Debug endpoint to test S3 bucket access
+router.get('/api/s3/debug', async (req, res) => {
+  try {
+    console.log('🔧 S3 Debug endpoint called');
+    
+    // Check S3 monitoring status
+    const monitoringStatus = s3MonitorService.getMonitoringStatus();
+    console.log('📡 Monitoring Status:', monitoringStatus);
+    
+    // Try to list objects in the bucket manually
+    let bucketContents = null;
+    let bucketError = null;
+    
+    try {
+      const result = await s3MonitorService.checkForNewImages();
+      bucketContents = result;
+    } catch (error) {
+      bucketError = error.message;
+      console.error('❌ S3 bucket access error:', error);
+    }
+    
+    // Get recent S3 images
+    let recentImages = [];
+    try {
+      recentImages = await s3MonitorService.getRecentS3Images(10);
+    } catch (error) {
+      console.error('❌ Recent images error:', error);
+    }
+    
+    res.json({
+      success: true,
+      debug: {
+        monitoringStatus,
+        bucketContents,
+        bucketError,
+        recentImages,
+        environmentCheck: {
+          hasAccessKey: !!process.env.AWS_ACCESS_KEY_ID,
+          hasSecretKey: !!process.env.AWS_SECRET_ACCESS_KEY,
+          region: process.env.AWS_REGION,
+          bucket: 'traffic-violations-uploads-111'
+        }
+      }
+    });
+  } catch (error) {
+    console.error('💥 S3 debug error:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message,
+      debug: {
+        environmentCheck: {
+          hasAccessKey: !!process.env.AWS_ACCESS_KEY_ID,
+          hasSecretKey: !!process.env.AWS_SECRET_ACCESS_KEY,
+          region: process.env.AWS_REGION,
+          bucket: 'traffic-violations-uploads-111'
+        }
+      }
+    });
+  }
+});
+
 module.exports = router; 
