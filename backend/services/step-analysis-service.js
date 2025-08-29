@@ -276,32 +276,30 @@ REJECT if ANY characters are affected by:
       const prompt = `
 You are a traffic violation detector. Your job is to find violations and identify which specific vehicle is committing them.
 
-**ANALYZE FOR THESE 4 VIOLATIONS:**
+**ANALYZE FOR THESE 3 SPECIFIC VIOLATIONS ONLY:**
 
 1. **No Helmet**: Motorcycle/scooter riders without helmets
 2. **Cell Phone Driving**: Driver using mobile phone while driving
 3. **Triple Riding**: More than 2 people on motorcycle/scooter
-4. **Wrong Side Driving**: Vehicle driving against traffic flow
 
-**WRONG SIDE DRIVING DETECTION:**
-- Establish dominant traffic flow (80% majority rule)
-- Compare vehicle orientations (headlights vs taillights)
-- Flag vehicles moving opposite to dominant flow  
-- NEVER use camera angles - only vehicle-to-vehicle comparison
-- Prioritize moving vehicles over stationary ones
+**IMPORTANT RESTRICTIONS:**
+- DO NOT detect 'Wrong Side Driving' or any other violations
+- ONLY flag the 3 violations listed above
+- If no Cell Phone Driving, Triple Riding, or No Helmet violations are found, report NO_VIOLATION
+- Ignore all other traffic infractions (parking violations, lane violations, etc.)
 
 **CRITICAL REQUIREMENTS:**
 - If you find a violation, describe the EXACT vehicle committing it
 - Provide specific location of the violating vehicle in the image
 - Be very specific about which vehicle to target for license plate extraction
-- Only flag clear, obvious violations
+- Only flag clear, obvious violations from the 3 specified types
 
 **RESPONSE FORMAT:**
 {
   "status": "VIOLATION_FOUND|NO_VIOLATION",
   "violations_detected": [
     {
-      "violation_type": "No Helmet|Cell Phone Driving|Triple Riding|Wrong Side Driving",
+      "violation_type": "No Helmet|Cell Phone Driving|Triple Riding",
       "detected": true,
       "violating_vehicle": {
         "description": "Detailed description of the violating vehicle",
