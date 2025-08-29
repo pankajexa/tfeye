@@ -29,6 +29,18 @@ interface QueueStats {
   currentImage?: string;
   isProcessing: boolean;
   isPaused: boolean;
+  // S3 monitoring stats
+  s3Monitoring?: {
+    isMonitoring: boolean;
+    bucket: string;
+    lastCheckTime: string;
+    isConfigured: boolean;
+  };
+  s3Images?: {
+    queued: number;
+    processing: number;
+    recentCount: number;
+  };
 }
 
 const ImageIntake: React.FC = () => {
@@ -53,6 +65,14 @@ const ImageIntake: React.FC = () => {
     console.log('  🌍 Environment mode:', import.meta.env.MODE);
     console.log('  🔍 All env vars:', import.meta.env);
     checkBackendStatus();
+    fetchQueueStatus();
+    
+    // Set up polling for queue status
+    const queueInterval = setInterval(fetchQueueStatus, 5000); // Every 5 seconds
+    
+    return () => {
+      clearInterval(queueInterval);
+    };
   }, []);
 
   const checkBackendStatus = async () => {
@@ -63,6 +83,35 @@ const ImageIntake: React.FC = () => {
     } catch (error) {
       console.error('Backend health check failed:', error);
       setBackendStatus('offline');
+    }
+  };
+
+  const fetchQueueStatus = async () => {
+    try {
+      const response = await apiService.getQueueStatus();
+      if (response.success) {
+        const systemStatus = response.data;
+        const queueData = systemStatus.queue;
+        const s3Data = systemStatus.s3Monitoring;
+        
+        setQueueStats({
+          total: queueData.stats.total || 0,
+          completed: queueData.stats.completed || 0,
+          failed: queueData.stats.failed || 0,
+          pending: queueData.stats.queued || 0,
+          currentImage: queueData.currentlyProcessing?.fileName,
+          isProcessing: queueData.isProcessing || false,
+          isPaused: !queueData.isProcessing && queueData.queueLength > 0,
+          s3Monitoring: s3Data,
+          s3Images: {
+            queued: queueData.queue?.filter((item: any) => item.type === 's3_auto' && item.status === 'queued').length || 0,
+            processing: queueData.currentlyProcessing?.type === 's3_auto' ? 1 : 0,
+            recentCount: 0 // Will be updated separately if needed
+          }
+        });
+      }
+    } catch (error) {
+      console.error('Failed to fetch queue status:', error);
     }
   };
 
@@ -732,31 +781,90 @@ const ImageIntake: React.FC = () => {
           </div>
 
           {/* Queue Status Display */}
-          {queueStats.total > 0 && (
-            <div className="mb-6 bg-blue-50 border border-blue-200 rounded-md p-4">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center">
-                  <div className="flex-shrink-0">
-                    {queueStats.isProcessing ? (
-                      <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600"></div>
-                    ) : queueStats.isPaused ? (
-                      <Pause className="h-6 w-6 text-orange-500" />
-                    ) : (
-                      <Play className="h-6 w-6 text-green-500" />
-                    )}
-                  </div>
-                  <div className="ml-3">
-                    <h3 className="text-sm font-medium text-blue-800">
-                      Processing Queue ({queueStats.completed}/{queueStats.total})
-                    </h3>
-                    <p className="mt-1 text-sm text-blue-700">
-                      {queueStats.currentImage ? `Currently processing: ${queueStats.currentImage}` : 
-                       queueStats.isPaused ? 'Queue paused' : 
-                       queueStats.isProcessing ? 'Processing...' : 'Queue ready'}
-                    </p>
+          {(queueStats.total > 0 || queueStats.s3Monitoring?.isConfigured) && (
+            <div className="mb-6 space-y-4">
+              {/* Main Queue Status */}
+              {queueStats.total > 0 && (
+                <div className="bg-blue-50 border border-blue-200 rounded-md p-4">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center">
+                      <div className="flex-shrink-0">
+                        {queueStats.isProcessing ? (
+                          <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600"></div>
+                        ) : queueStats.isPaused ? (
+                          <Pause className="h-6 w-6 text-orange-500" />
+                        ) : (
+                          <Play className="h-6 w-6 text-green-500" />
+                        )}
+                      </div>
+                      <div className="ml-3">
+                        <h3 className="text-sm font-medium text-blue-800">
+                          Processing Queue ({queueStats.completed}/{queueStats.total})
+                        </h3>
+                        <p className="mt-1 text-sm text-blue-700">
+                          {queueStats.currentImage ? `Currently processing: ${queueStats.currentImage}` : 
+                           queueStats.isPaused ? 'Queue paused' : 
+                           queueStats.isProcessing ? 'Processing...' : 'Queue ready'}
+                        </p>
+                      </div>
+                    </div>
                   </div>
                 </div>
-                <div className="flex items-center space-x-2">
+              )}
+              
+              {/* S3 Monitoring Status */}
+              {queueStats.s3Monitoring?.isConfigured && (
+                <div className="bg-purple-50 border border-purple-200 rounded-md p-4">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center">
+                      <div className="flex-shrink-0">
+                        {queueStats.s3Monitoring.isMonitoring ? (
+                          <div className="w-6 h-6 bg-purple-600 rounded-full flex items-center justify-center">
+                            <div className="w-2 h-2 bg-white rounded-full animate-pulse"></div>
+                          </div>
+                        ) : (
+                          <div className="w-6 h-6 bg-gray-400 rounded-full"></div>
+                        )}
+                      </div>
+                      <div className="ml-3">
+                        <h3 className="text-sm font-medium text-purple-800">
+                          📱 Android App Auto-Processing
+                        </h3>
+                        <p className="mt-1 text-sm text-purple-700">
+                          {queueStats.s3Monitoring.isMonitoring ? 
+                            `Monitoring ${queueStats.s3Monitoring.bucket} - Checking every 1 minute` :
+                            'Monitoring paused'
+                          }
+                        </p>
+                        {queueStats.s3Images && (queueStats.s3Images.queued > 0 || queueStats.s3Images.processing > 0) && (
+                          <p className="mt-1 text-xs text-purple-600">
+                            📊 S3 Queue: {queueStats.s3Images.processing} processing, {queueStats.s3Images.queued} waiting
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                    <div className="flex items-center space-x-2">
+                      <button
+                        onClick={() => apiService.checkS3Now()}
+                        className="inline-flex items-center px-3 py-1 border border-purple-300 text-sm font-medium rounded-md text-purple-700 bg-purple-50 hover:bg-purple-100"
+                        title="Check S3 for new images now"
+                      >
+                        <RotateCcw className="h-4 w-4 mr-1" />
+                        Check Now
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
+              
+              {/* Queue Controls */}
+              {queueStats.total > 0 && (
+                <div className="bg-gray-50 border border-gray-200 rounded-md p-3">
+                  <div className="flex items-center justify-between">
+                    <div className="text-sm text-gray-600">
+                      Queue Controls
+                    </div>
+                    <div className="flex items-center space-x-2">
                   {queueStats.isProcessing && !queueStats.isPaused ? (
                     <button
                       onClick={pauseQueue}
@@ -784,22 +892,28 @@ const ImageIntake: React.FC = () => {
                       Retry Failed ({queueStats.failed})
                     </button>
                   )}
+                    </div>
+                  </div>
                 </div>
-              </div>
+              )}
               
               {/* Progress Bar */}
-              <div className="mt-3">
+              {queueStats.total > 0 && (
+                <div className="bg-blue-50 border border-blue-200 rounded-md p-4">
+                  <div className="mt-3">
                 <div className="flex justify-between text-sm text-blue-600 mb-1">
                   <span>Progress</span>
-                  <span>{Math.round((queueStats.completed / queueStats.total) * 100)}%</span>
+                  <span>{Math.round(((queueStats.completed || 0) / (queueStats.total || 1)) * 100)}%</span>
                 </div>
                 <div className="w-full bg-blue-200 rounded-full h-2">
                   <div 
                     className="bg-blue-600 h-2 rounded-full transition-all duration-300"
-                    style={{ width: `${Math.round((queueStats.completed / queueStats.total) * 100)}%` }}
+                    style={{ width: `${Math.round(((queueStats.completed || 0) / (queueStats.total || 1)) * 100)}%` }}
                   ></div>
+                  </div>
+                  </div>
                 </div>
-              </div>
+              )}
             </div>
           )}
 

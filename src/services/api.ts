@@ -604,6 +604,65 @@ class ApiService {
     });
     return response.json();
   }
+
+  // Queue Management API methods
+  async getQueueStatus() {
+    const response = await fetch(`${BACKEND_URL}/api/queue/status`);
+    return response.json();
+  }
+
+  async pauseQueue() {
+    const response = await fetch(`${BACKEND_URL}/api/queue/pause`, {
+      method: 'POST',
+    });
+    return response.json();
+  }
+
+  async resumeQueue() {
+    const response = await fetch(`${BACKEND_URL}/api/queue/resume`, {
+      method: 'POST',
+    });
+    return response.json();
+  }
+
+  async clearQueue() {
+    const response = await fetch(`${BACKEND_URL}/api/queue/clear`, {
+      method: 'DELETE',
+    });
+    return response.json();
+  }
+
+  // S3 Monitoring API methods
+  async startS3Monitoring() {
+    const response = await fetch(`${BACKEND_URL}/api/s3/monitoring/start`, {
+      method: 'POST',
+    });
+    return response.json();
+  }
+
+  async stopS3Monitoring() {
+    const response = await fetch(`${BACKEND_URL}/api/s3/monitoring/stop`, {
+      method: 'POST',
+    });
+    return response.json();
+  }
+
+  async getS3MonitoringStatus() {
+    const response = await fetch(`${BACKEND_URL}/api/s3/monitoring/status`);
+    return response.json();
+  }
+
+  async getRecentS3Images(limit: number = 20) {
+    const response = await fetch(`${BACKEND_URL}/api/s3/recent-images?limit=${limit}`);
+    return response.json();
+  }
+
+  async checkS3Now() {
+    const response = await fetch(`${BACKEND_URL}/api/s3/check-now`, {
+      method: 'POST',
+    });
+    return response.json();
+  }
 }
 
 export const apiService = new ApiService(); 

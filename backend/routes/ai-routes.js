@@ -6,6 +6,8 @@ const visionService = require('../vision-service');
 const stepAnalysisService = require('../services/step-analysis-service');
 const databaseService = require('../services/database-service');
 const s3Service = require('../services/s3-service');
+const queueManagementService = require('../services/queue-management-service');
+const s3MonitorService = require('../services/s3-monitor-service');
 const violationsData = require('../traffic_violations');
 
 const router = express.Router();
@@ -141,6 +143,11 @@ router.post('/api/complete-analysis', upload.single('image'), handleMulterError,
     console.log('📋 Step 4: RTA Vehicle Details Lookup');
     console.log('📋 Step 5: AI Vehicle Analysis & Comparison');
     
+    // Add manual upload to the unified queue instead of direct processing
+    const queueItem = queueManagementService.addManualUpload(req.file, analysisRecord);
+    
+    // For backward compatibility, we'll still process immediately for now
+    // But the queue system is ready for batch processing if needed
     const workflowResult = await stepAnalysisService.runCompleteAnalysis(req.file.buffer);
     
     // Update database with analysis results
@@ -1362,6 +1369,203 @@ router.post('/api/violations/calculate-fine', (req, res) => {
       success: false,
       error: error.message || 'Failed to calculate fine',
       errorCode: 'CALCULATE_FINE_FAILED'
+    });
+  }
+});
+
+// =============================================================================
+// QUEUE MANAGEMENT & S3 MONITORING ENDPOINTS
+// =============================================================================
+
+// Get queue status and system information
+router.get('/api/queue/status', async (req, res) => {
+  try {
+    const systemStatus = queueManagementService.getSystemStatus();
+    
+    res.json({
+      success: true,
+      data: systemStatus
+    });
+  } catch (error) {
+    console.error('💥 Queue status error:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message || 'Failed to get queue status',
+      errorCode: 'QUEUE_STATUS_FAILED'
+    });
+  }
+});
+
+// Start S3 monitoring
+router.post('/api/s3/monitoring/start', async (req, res) => {
+  try {
+    const started = await queueManagementService.startS3Monitoring();
+    
+    if (started) {
+      res.json({
+        success: true,
+        message: 'S3 monitoring started successfully',
+        data: queueManagementService.getS3MonitoringStatus()
+      });
+    } else {
+      res.status(400).json({
+        success: false,
+        error: 'Failed to start S3 monitoring (may already be running or not configured)',
+        errorCode: 'S3_MONITORING_START_FAILED'
+      });
+    }
+  } catch (error) {
+    console.error('💥 Start S3 monitoring error:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message || 'Failed to start S3 monitoring',
+      errorCode: 'S3_MONITORING_START_ERROR'
+    });
+  }
+});
+
+// Stop S3 monitoring
+router.post('/api/s3/monitoring/stop', async (req, res) => {
+  try {
+    const stopped = queueManagementService.stopS3Monitoring();
+    
+    res.json({
+      success: true,
+      message: stopped ? 'S3 monitoring stopped successfully' : 'S3 monitoring was not running',
+      data: queueManagementService.getS3MonitoringStatus()
+    });
+  } catch (error) {
+    console.error('💥 Stop S3 monitoring error:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message || 'Failed to stop S3 monitoring',
+      errorCode: 'S3_MONITORING_STOP_ERROR'
+    });
+  }
+});
+
+// Get S3 monitoring status
+router.get('/api/s3/monitoring/status', async (req, res) => {
+  try {
+    const status = queueManagementService.getS3MonitoringStatus();
+    
+    res.json({
+      success: true,
+      data: status
+    });
+  } catch (error) {
+    console.error('💥 S3 monitoring status error:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message || 'Failed to get S3 monitoring status',
+      errorCode: 'S3_MONITORING_STATUS_ERROR'
+    });
+  }
+});
+
+// Get recent S3 images
+router.get('/api/s3/recent-images', async (req, res) => {
+  try {
+    const limit = parseInt(req.query.limit) || 20;
+    const recentImages = await queueManagementService.getRecentS3Images(limit);
+    
+    res.json({
+      success: true,
+      data: {
+        images: recentImages,
+        count: recentImages.length
+      }
+    });
+  } catch (error) {
+    console.error('💥 Recent S3 images error:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message || 'Failed to get recent S3 images',
+      errorCode: 'S3_RECENT_IMAGES_ERROR'
+    });
+  }
+});
+
+// Manually trigger S3 check (for testing/immediate processing)
+router.post('/api/s3/check-now', async (req, res) => {
+  try {
+    const newImages = await s3MonitorService.checkForNewImages();
+    
+    res.json({
+      success: true,
+      message: `Found and queued ${newImages.length} new images`,
+      data: {
+        newImages: newImages,
+        count: newImages.length
+      }
+    });
+  } catch (error) {
+    console.error('💥 Manual S3 check error:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message || 'Failed to check S3 for new images',
+      errorCode: 'S3_CHECK_NOW_ERROR'
+    });
+  }
+});
+
+// Queue management endpoints
+router.post('/api/queue/pause', (req, res) => {
+  try {
+    const paused = queueManagementService.pauseProcessing();
+    
+    res.json({
+      success: true,
+      message: paused ? 'Queue processing paused' : 'Queue was not running',
+      data: queueManagementService.getQueueStatus()
+    });
+  } catch (error) {
+    console.error('💥 Pause queue error:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message || 'Failed to pause queue',
+      errorCode: 'QUEUE_PAUSE_ERROR'
+    });
+  }
+});
+
+router.post('/api/queue/resume', (req, res) => {
+  try {
+    const resumed = queueManagementService.resumeProcessing();
+    
+    res.json({
+      success: true,
+      message: resumed ? 'Queue processing resumed' : 'Queue was already running or empty',
+      data: queueManagementService.getQueueStatus()
+    });
+  } catch (error) {
+    console.error('💥 Resume queue error:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message || 'Failed to resume queue',
+      errorCode: 'QUEUE_RESUME_ERROR'
+    });
+  }
+});
+
+router.delete('/api/queue/clear', (req, res) => {
+  try {
+    const clearedCount = queueManagementService.clearQueue();
+    
+    res.json({
+      success: true,
+      message: `Cleared ${clearedCount} items from queue`,
+      data: {
+        clearedCount,
+        currentStatus: queueManagementService.getQueueStatus()
+      }
+    });
+  } catch (error) {
+    console.error('💥 Clear queue error:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message || 'Failed to clear queue',
+      errorCode: 'QUEUE_CLEAR_ERROR'
     });
   }
 });
