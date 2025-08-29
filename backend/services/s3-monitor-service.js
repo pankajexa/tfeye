@@ -110,7 +110,7 @@ class S3MonitorService {
         // Filter images uploaded after lastCheckTime
         const recentImages = data.Contents.filter(obj => {
           const isAfterLastCheck = obj.LastModified > this.lastCheckTime;
-          const isJpg = obj.Key.endsWith('.jpg');
+          const isJpg = obj.Key.toLowerCase().endsWith('.jpg'); // Handle both .jpg and .JPG
           const hasContent = obj.Size > 0;
           
           console.log(`🔍 Checking ${obj.Key}:`);
@@ -266,6 +266,29 @@ class S3MonitorService {
       lastCheckTime: this.lastCheckTime,
       isConfigured: this.isConfigured()
     };
+  }
+
+  // Reset last check time to process older images
+  resetLastCheckTime(hoursBack = 24) {
+    const newTime = new Date();
+    newTime.setHours(newTime.getHours() - hoursBack);
+    this.lastCheckTime = newTime;
+    console.log(`⏰ Reset last check time to ${hoursBack} hours ago: ${this.lastCheckTime.toISOString()}`);
+  }
+
+  // Force check for images from a specific time
+  async forceCheckFromTime(fromTime) {
+    const originalTime = this.lastCheckTime;
+    this.lastCheckTime = fromTime;
+    
+    try {
+      const result = await this.checkForNewImages();
+      console.log(`🔄 Force check found ${result.length} images from ${fromTime.toISOString()}`);
+      return result;
+    } finally {
+      // Restore original time
+      this.lastCheckTime = originalTime;
+    }
   }
 
   async getRecentS3Images(limit = 20) {

@@ -1509,6 +1509,66 @@ router.post('/api/s3/check-now', async (req, res) => {
   }
 });
 
+// Reset S3 monitor last check time to process older images
+router.post('/api/s3/reset-check-time', async (req, res) => {
+  try {
+    const { hoursBack = 24 } = req.body;
+    
+    s3MonitorService.resetLastCheckTime(hoursBack);
+    
+    res.json({
+      success: true,
+      message: `Reset last check time to ${hoursBack} hours ago`,
+      data: {
+        newLastCheckTime: s3MonitorService.getMonitoringStatus().lastCheckTime,
+        hoursBack
+      }
+    });
+  } catch (error) {
+    console.error('💥 Reset check time error:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message || 'Failed to reset check time',
+      errorCode: 'S3_RESET_TIME_ERROR'
+    });
+  }
+});
+
+// Force check S3 from a specific time (for processing existing images)
+router.post('/api/s3/force-check-from', async (req, res) => {
+  try {
+    const { fromTime } = req.body;
+    
+    let checkFromTime;
+    if (fromTime) {
+      checkFromTime = new Date(fromTime);
+    } else {
+      // Default to 24 hours ago
+      checkFromTime = new Date();
+      checkFromTime.setHours(checkFromTime.getHours() - 24);
+    }
+    
+    const newImages = await s3MonitorService.forceCheckFromTime(checkFromTime);
+    
+    res.json({
+      success: true,
+      message: `Force check found and queued ${newImages.length} images from ${checkFromTime.toISOString()}`,
+      data: {
+        newImages: newImages,
+        count: newImages.length,
+        fromTime: checkFromTime.toISOString()
+      }
+    });
+  } catch (error) {
+    console.error('💥 Force check error:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message || 'Failed to force check S3',
+      errorCode: 'S3_FORCE_CHECK_ERROR'
+    });
+  }
+});
+
 // Queue management endpoints
 router.post('/api/queue/pause', (req, res) => {
   try {
