@@ -8,6 +8,7 @@ const databaseService = require('../services/database-service');
 const s3Service = require('../services/s3-service');
 const queueManagementService = require('../services/queue-management-service');
 const s3MonitorService = require('../services/s3-monitor-service');
+const memoryStorageService = require('../services/memory-storage-service');
 const violationsData = require('../traffic_violations');
 
 const router = express.Router();
@@ -103,8 +104,21 @@ router.post('/api/complete-analysis', upload.single('image'), handleMulterError,
         pointName: req.body.pointName
       };
       
-      analysisRecord = await databaseService.createAnalysisRecord(fileData, officerData);
-      console.log(`💾 Created database record with UUID: ${analysisRecord.uuid}`);
+      // Try database first, fall back to memory storage
+      let usingMemoryStorage = false;
+      try {
+        analysisRecord = await databaseService.createAnalysisRecord(fileData, officerData);
+        console.log(`💾 Created database record with UUID: ${analysisRecord.uuid}`);
+      } catch (dbError) {
+        console.error('❌ Database error creating analysis record:', dbError);
+        console.log('🧠 Falling back to memory storage...');
+        
+        // Enable memory storage as fallback
+        memoryStorageService.enable();
+        analysisRecord = await memoryStorageService.createAnalysisRecord(fileData, officerData);
+        usingMemoryStorage = true;
+        console.log(`⚠️ Created memory record: ${analysisRecord.uuid} (will be lost on restart)`);
+      }
       
       // Upload to S3 if configured
       if (s3Service.isConfigured()) {
@@ -150,17 +164,25 @@ router.post('/api/complete-analysis', upload.single('image'), handleMulterError,
     // But the queue system is ready for batch processing if needed
     const workflowResult = await stepAnalysisService.runCompleteAnalysis(req.file.buffer);
     
-    // Update database with analysis results
+    // Update database with analysis results (with memory fallback)
     if (analysisRecord && workflowResult.success) {
       try {
-        await databaseService.updateAnalysisResults(analysisRecord.uuid, workflowResult);
-        console.log(`💾 Updated database record ${analysisRecord.uuid} with analysis results`);
+        if (usingMemoryStorage) {
+          await memoryStorageService.updateAnalysisResults(analysisRecord.uuid, workflowResult);
+          console.log(`🧠 Updated memory record ${analysisRecord.uuid} with analysis results`);
+        } else {
+          await databaseService.updateAnalysisResults(analysisRecord.uuid, workflowResult);
+          console.log(`💾 Updated database record ${analysisRecord.uuid} with analysis results`);
+        }
         
-        // Add database info to response
+        // Add storage info to response
         workflowResult.databaseInfo = {
           uuid: analysisRecord.uuid,
           recordId: analysisRecord.id,
           stored: true,
+          storageType: usingMemoryStorage ? 'memory' : 'database',
+          persistent: !usingMemoryStorage,
+          warning: usingMemoryStorage ? 'Data stored in memory - will be lost on server restart' : null,
           s3Upload: s3UploadResult ? {
             url: s3UploadResult.s3Url,
             key: s3UploadResult.s3Key,
@@ -171,8 +193,8 @@ router.post('/api/complete-analysis', upload.single('image'), handleMulterError,
             reason: s3Service.isConfigured() ? 'Upload failed' : 'S3 not configured'
           }
         };
-      } catch (dbError) {
-        console.warn('⚠️ Database update failed:', dbError.message);
+      } catch (storageError) {
+        console.warn(`⚠️ ${usingMemoryStorage ? 'Memory' : 'Database'} update failed:`, storageError.message);
         if (analysisRecord) {
           await databaseService.updateAnalysisStatus(analysisRecord.uuid, 'failed', dbError.message);
         }
@@ -1130,7 +1152,20 @@ router.get('/api/analysis/:uuid', async (req, res) => {
     
     console.log(`🔍 Getting analysis for UUID: ${uuid}`);
     
-    const analysis = await databaseService.getAnalysisByUuid(uuid);
+    let analysis;
+    let fromMemory = false;
+    
+    try {
+      analysis = await databaseService.getAnalysisByUuid(uuid);
+    } catch (dbError) {
+      console.log('🧠 Database failed, checking memory storage...');
+      try {
+        analysis = await memoryStorageService.getAnalysisByUuid(uuid);
+        fromMemory = true;
+      } catch (memError) {
+        console.error('❌ Both database and memory failed for UUID:', uuid);
+      }
+    }
     
     if (!analysis) {
       return res.status(404).json({
@@ -1142,7 +1177,12 @@ router.get('/api/analysis/:uuid', async (req, res) => {
     
     res.json({
       success: true,
-      data: analysis
+      data: analysis,
+      metadata: {
+        source: fromMemory ? 'memory' : 'database',
+        persistent: !fromMemory,
+        warning: fromMemory ? 'Data from memory storage - not persistent' : null
+      }
     });
     
   } catch (error) {
@@ -1163,11 +1203,30 @@ router.get('/api/analyses', async (req, res) => {
     
     console.log(`📋 Getting recent analyses (limit: ${limit}, offset: ${offset})`);
     
-    const analyses = await databaseService.getRecentAnalyses(limit, offset);
+    let analyses;
+    let fromMemory = false;
+    
+    try {
+      analyses = await databaseService.getRecentAnalyses(limit, offset);
+    } catch (dbError) {
+      console.log('🧠 Database failed, checking memory storage...');
+      try {
+        analyses = await memoryStorageService.getRecentAnalyses(limit);
+        fromMemory = true;
+      } catch (memError) {
+        console.error('❌ Both database and memory failed for recent analyses');
+        analyses = [];
+      }
+    }
     
     res.json({
       success: true,
       data: analyses,
+      metadata: {
+        source: fromMemory ? 'memory' : 'database',
+        persistent: !fromMemory,
+        warning: fromMemory ? 'Data from memory storage - not persistent' : null
+      },
       pagination: {
         limit,
         offset,
@@ -1190,11 +1249,36 @@ router.get('/api/statistics', async (req, res) => {
   try {
     console.log('📊 Getting statistics...');
     
-    const stats = await databaseService.getStatistics();
+    let stats;
+    let fromMemory = false;
+    
+    try {
+      stats = await databaseService.getStatistics();
+    } catch (dbError) {
+      console.log('🧠 Database failed, checking memory storage...');
+      try {
+        stats = await memoryStorageService.getStatistics();
+        fromMemory = true;
+      } catch (memError) {
+        console.error('❌ Both database and memory failed for statistics');
+        stats = {
+          total_analyses: 0,
+          completed_analyses: 0,
+          processing_analyses: 0,
+          failed_analyses: 0,
+          success_rate: 0
+        };
+      }
+    }
     
     res.json({
       success: true,
-      data: stats
+      data: stats,
+      metadata: {
+        source: fromMemory ? 'memory' : 'database',
+        persistent: !fromMemory,
+        warning: fromMemory ? 'Statistics from memory storage - not persistent' : null
+      }
     });
     
   } catch (error) {
