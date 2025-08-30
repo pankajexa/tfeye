@@ -1775,4 +1775,169 @@ router.get('/api/s3/debug', async (req, res) => {
   }
 });
 
+// CRITICAL: Officer review endpoints for updating review status
+// POST /api/officer-review - Approve or reject analysis
+router.post('/api/officer-review', async (req, res) => {
+  try {
+    const { uuid, officerId, action, reason } = req.body;
+    
+    // Validate required fields
+    if (!uuid || !officerId || !action) {
+      return res.status(400).json({
+        success: false,
+        error: 'Missing required fields: uuid, officerId, action',
+        errorCode: 'MISSING_REQUIRED_FIELDS'
+      });
+    }
+    
+    // Validate action
+    if (!['approved', 'rejected', 'modified'].includes(action)) {
+      return res.status(400).json({
+        success: false,
+        error: 'Invalid action. Must be: approved, rejected, or modified',
+        errorCode: 'INVALID_ACTION'
+      });
+    }
+    
+    console.log(`📝 Officer review: ${uuid} -> ${action} by ${officerId}`);
+    
+    let result;
+    let usingMemoryStorage = false;
+    
+    try {
+      // Try database first
+      result = await databaseService.updateReviewStatus(uuid, officerId, action, reason);
+    } catch (dbError) {
+      console.error('❌ Database review update failed:', dbError);
+      console.log('🧠 Memory storage does not support review updates');
+      return res.status(500).json({
+        success: false,
+        error: 'Review update failed - database required for review workflow',
+        errorCode: 'REVIEW_UPDATE_FAILED',
+        details: dbError.message
+      });
+    }
+    
+    res.json({
+      success: true,
+      message: `Analysis ${action} successfully`,
+      data: result,
+      metadata: {
+        storageType: usingMemoryStorage ? 'memory' : 'database',
+        persistent: !usingMemoryStorage
+      }
+    });
+    
+  } catch (error) {
+    console.error('💥 Officer review error:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message || 'Failed to process officer review',
+      errorCode: 'OFFICER_REVIEW_FAILED'
+    });
+  }
+});
+
+// GET /api/pending-reviews - Get analyses awaiting review (reviewed = 'NO')
+router.get('/api/pending-reviews', async (req, res) => {
+  try {
+    const limit = parseInt(req.query.limit) || 50;
+    const offset = parseInt(req.query.offset) || 0;
+    
+    console.log(`📋 Getting pending reviews (reviewed='NO', limit: ${limit}, offset: ${offset})`);
+    
+    let analyses;
+    let fromMemory = false;
+    
+    try {
+      analyses = await databaseService.getAnalysesByReviewStatus('NO', limit, offset);
+    } catch (dbError) {
+      console.log('🧠 Database failed, checking memory storage...');
+      try {
+        // Memory storage doesn't have review status filtering, get all and filter
+        const allAnalyses = await memoryStorageService.getRecentAnalyses(limit);
+        analyses = allAnalyses.filter(analysis => !analysis.reviewed || analysis.reviewed === 'NO');
+        fromMemory = true;
+      } catch (memError) {
+        console.error('❌ Both database and memory failed for pending reviews');
+        analyses = [];
+      }
+    }
+    
+    res.json({
+      success: true,
+      data: analyses,
+      metadata: {
+        source: fromMemory ? 'memory' : 'database',
+        persistent: !fromMemory,
+        warning: fromMemory ? 'Review filtering limited in memory storage' : null
+      },
+      pagination: {
+        limit,
+        offset,
+        count: analyses.length
+      }
+    });
+    
+  } catch (error) {
+    console.error('💥 Get pending reviews error:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message || 'Failed to get pending reviews',
+      errorCode: 'GET_PENDING_REVIEWS_FAILED'
+    });
+  }
+});
+
+// GET /api/reviewed-analyses - Get analyses that have been reviewed (reviewed = 'YES')
+router.get('/api/reviewed-analyses', async (req, res) => {
+  try {
+    const limit = parseInt(req.query.limit) || 50;
+    const offset = parseInt(req.query.offset) || 0;
+    
+    console.log(`📋 Getting reviewed analyses (reviewed='YES', limit: ${limit}, offset: ${offset})`);
+    
+    let analyses;
+    let fromMemory = false;
+    
+    try {
+      analyses = await databaseService.getAnalysesByReviewStatus('YES', limit, offset);
+    } catch (dbError) {
+      console.log('🧠 Database failed, checking memory storage...');
+      try {
+        // Memory storage doesn't have review status filtering, get all and filter
+        const allAnalyses = await memoryStorageService.getRecentAnalyses(limit);
+        analyses = allAnalyses.filter(analysis => analysis.reviewed === 'YES');
+        fromMemory = true;
+      } catch (memError) {
+        console.error('❌ Both database and memory failed for reviewed analyses');
+        analyses = [];
+      }
+    }
+    
+    res.json({
+      success: true,
+      data: analyses,
+      metadata: {
+        source: fromMemory ? 'memory' : 'database',
+        persistent: !fromMemory,
+        warning: fromMemory ? 'Review filtering limited in memory storage' : null
+      },
+      pagination: {
+        limit,
+        offset,
+        count: analyses.length
+      }
+    });
+    
+  } catch (error) {
+    console.error('💥 Get reviewed analyses error:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message || 'Failed to get reviewed analyses',
+      errorCode: 'GET_REVIEWED_ANALYSES_FAILED'
+    });
+  }
+});
+
 module.exports = router; 

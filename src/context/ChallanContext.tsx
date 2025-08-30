@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, ReactNode } from 'react';
-import { WorkflowResponse } from '../services/api';
+import { WorkflowResponse, apiService } from '../services/api';
 import { ViolationAnalysis, VehicleComparison, VehicleAnalysis, WorkflowSummary, RTAData, StepAnalysisResponse, QualityAssessmentData, OCRData } from '../types';
 import { useAuth } from './AuthContext';
 
@@ -412,7 +412,31 @@ export const ChallanProvider: React.FC<ChallanProviderProps> = ({ children }) =>
     }));
   };
 
-  const approveChallan = (id: string, reviewedBy: string) => {
+  const approveChallan = async (id: string, reviewedBy: string) => {
+    // Find the challan to get its UUID
+    const challan = challans.find(c => c.id === id);
+    if (!challan) {
+      console.error('❌ Challan not found for approval:', id);
+      return;
+    }
+
+    // CRITICAL: Submit review to database first
+    if (challan.stepAnalysisResponse) {
+      try {
+        console.log(`📝 Submitting approval to database for UUID: ${challan.stepAnalysisResponse.uuid}`);
+        await apiService.submitOfficerReview(
+          challan.stepAnalysisResponse.uuid, 
+          reviewedBy, 
+          'approved'
+        );
+        console.log('✅ Database approval successful');
+      } catch (error) {
+        console.error('❌ Database approval failed:', error);
+        // Continue with local update even if database fails
+      }
+    }
+
+    // Update local state
     setChallans(prev => prev.map(challan => 
       challan.id === id ? { 
         ...challan, 
@@ -423,7 +447,32 @@ export const ChallanProvider: React.FC<ChallanProviderProps> = ({ children }) =>
     ));
   };
 
-  const rejectChallan = (id: string, reason: string, reviewedBy: string) => {
+  const rejectChallan = async (id: string, reason: string, reviewedBy: string) => {
+    // Find the challan to get its UUID
+    const challan = challans.find(c => c.id === id);
+    if (!challan) {
+      console.error('❌ Challan not found for rejection:', id);
+      return;
+    }
+
+    // CRITICAL: Submit review to database first
+    if (challan.stepAnalysisResponse) {
+      try {
+        console.log(`📝 Submitting rejection to database for UUID: ${challan.stepAnalysisResponse.uuid}`);
+        await apiService.submitOfficerReview(
+          challan.stepAnalysisResponse.uuid, 
+          reviewedBy, 
+          'rejected',
+          reason
+        );
+        console.log('✅ Database rejection successful');
+      } catch (error) {
+        console.error('❌ Database rejection failed:', error);
+        // Continue with local update even if database fails
+      }
+    }
+
+    // Update local state
     setChallans(prev => prev.map(challan => 
       challan.id === id ? { 
         ...challan, 

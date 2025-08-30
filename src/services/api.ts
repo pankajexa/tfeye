@@ -663,6 +663,48 @@ class ApiService {
     });
     return response.json();
   }
+
+  // CRITICAL: Officer review APIs for database integration
+  async submitOfficerReview(uuid: string, officerId: string, action: 'approved' | 'rejected' | 'modified', reason?: string) {
+    const response = await fetch(`${BACKEND_URL}/api/officer-review`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        uuid,
+        officerId,
+        action,
+        reason
+      }),
+    });
+    
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`);
+    }
+    
+    return response.json();
+  }
+
+  async getPendingReviews(limit = 50, offset = 0) {
+    const response = await fetch(`${BACKEND_URL}/api/pending-reviews?limit=${limit}&offset=${offset}`);
+    
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`);
+    }
+    
+    return response.json();
+  }
+
+  async getReviewedAnalyses(limit = 50, offset = 0) {
+    const response = await fetch(`${BACKEND_URL}/api/reviewed-analyses?limit=${limit}&offset=${offset}`);
+    
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`);
+    }
+    
+    return response.json();
+  }
 }
 
 export const apiService = new ApiService(); 

@@ -66,6 +66,16 @@ CREATE TABLE IF NOT EXISTS analysis_results (
     status VARCHAR(50) DEFAULT 'processing',
     processing_error TEXT,
     
+    -- CRITICAL: Review Status (YES/NO flag as requested)
+    reviewed VARCHAR(3) DEFAULT 'NO' CHECK (reviewed IN ('YES', 'NO')),
+    review_action VARCHAR(20) NULL CHECK (review_action IN ('approved', 'rejected', 'modified')),
+    review_reason TEXT,
+    reviewed_by_officer_id VARCHAR(100),
+    reviewed_at TIMESTAMP,
+    
+    -- Upload Source
+    upload_source VARCHAR(20) DEFAULT 'manual' CHECK (upload_source IN ('manual', 's3_auto')),
+    
     -- Timestamps
     analysis_started_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     analysis_completed_at TIMESTAMP,
@@ -114,6 +124,9 @@ CREATE INDEX IF NOT EXISTS idx_uploaded_at ON analysis_results(uploaded_at);
 CREATE INDEX IF NOT EXISTS idx_officer_id ON analysis_results(image_captured_by_officer_id);
 CREATE INDEX IF NOT EXISTS idx_status ON analysis_results(status);
 CREATE INDEX IF NOT EXISTS idx_uuid ON analysis_results(uuid);
+CREATE INDEX IF NOT EXISTS idx_reviewed ON analysis_results(reviewed);
+CREATE INDEX IF NOT EXISTS idx_review_action ON analysis_results(review_action);
+CREATE INDEX IF NOT EXISTS idx_reviewed_by ON analysis_results(reviewed_by_officer_id);
 CREATE INDEX IF NOT EXISTS idx_violations_analysis ON violations(analysis_id);
 CREATE INDEX IF NOT EXISTS idx_rta_matches_analysis ON rta_matches(analysis_id);
 CREATE INDEX IF NOT EXISTS idx_officer_reviews_analysis ON officer_reviews(analysis_id);

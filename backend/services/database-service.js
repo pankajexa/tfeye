@@ -105,7 +105,8 @@ class DatabaseService {
                     step6_violation_data = $19,
                     full_analysis_response = $20,
                     status = $21,
-                    analysis_completed_at = $22
+                    analysis_completed_at = $22,
+                    upload_source = $23
                 WHERE uuid = $1
                 RETURNING id
             `;
@@ -132,7 +133,8 @@ class DatabaseService {
                 JSON.stringify(step6Data),
                 JSON.stringify(stepAnalysisResponse),
                 'completed',
-                new Date()
+                new Date(),
+                'manual' // upload_source, will be updated for S3 uploads
             ];
             
             const updateResult = await client.query(updateQuery, updateValues);
@@ -179,7 +181,84 @@ class DatabaseService {
         }
     }
     
-    // Record officer review/action
+    // CRITICAL: Update review status (YES/NO flag) 
+    async updateReviewStatus(uuid, officerId, action, reason = null) {
+        const client = await getClient();
+        
+        try {
+            await client.query('BEGIN');
+            
+            console.log(`📝 Updating review status for ${uuid}: ${action} by officer ${officerId}`);
+            
+            // Update the main analysis_results table with review flag and details
+            const updateQuery = `
+                UPDATE analysis_results SET
+                    reviewed = 'YES',
+                    review_action = $2,
+                    review_reason = $3,
+                    reviewed_by_officer_id = $4,
+                    reviewed_at = $5,
+                    updated_at = $5
+                WHERE uuid = $1
+                RETURNING id
+            `;
+            
+            const updateValues = [
+                uuid,
+                action, // 'approved', 'rejected', 'modified'
+                reason,
+                officerId,
+                new Date()
+            ];
+            
+            const updateResult = await client.query(updateQuery, updateValues);
+            
+            if (updateResult.rows.length === 0) {
+                throw new Error(`Analysis record ${uuid} not found`);
+            }
+            
+            const analysisId = updateResult.rows[0].id;
+            
+            // Also record in officer_reviews table for detailed tracking
+            const reviewQuery = `
+                INSERT INTO officer_reviews (analysis_id, officer_id, action, reason, reviewed_at)
+                VALUES ($1, $2, $3, $4, $5)
+                RETURNING id
+            `;
+            
+            const reviewValues = [
+                analysisId,
+                officerId,
+                action,
+                reason,
+                new Date()
+            ];
+            
+            await client.query(reviewQuery, reviewValues);
+            
+            await client.query('COMMIT');
+            
+            console.log(`✅ Review status updated: ${uuid} -> reviewed='YES', action='${action}'`);
+            
+            return {
+                uuid,
+                reviewed: 'YES',
+                review_action: action,
+                review_reason: reason,
+                reviewed_by_officer_id: officerId,
+                reviewed_at: new Date().toISOString()
+            };
+            
+        } catch (error) {
+            await client.query('ROLLBACK');
+            console.error('❌ Error updating review status:', error);
+            throw error;
+        } finally {
+            client.release();
+        }
+    }
+    
+    // Legacy method (kept for backward compatibility)
     async recordOfficerReview(uuid, officerId, action, reason = null, modifications = null) {
         try {
             // Get analysis ID first
@@ -230,6 +309,30 @@ class DatabaseService {
             return result.rows[0] || null;
         } catch (error) {
             console.error('❌ Error getting analysis by UUID:', error);
+            throw error;
+        }
+    }
+    
+    // Get analyses by review status
+    async getAnalysesByReviewStatus(reviewStatus = 'NO', limit = 50, offset = 0) {
+        try {
+            const result = await query(`
+                SELECT 
+                    uuid, filename, license_plate_number, vehicle_make, vehicle_model, vehicle_color,
+                    violations_detected, violation_types, status, reviewed, review_action, review_reason,
+                    reviewed_by_officer_id, reviewed_at, s3_url, s3_key,
+                    sector_officer_ps_name, image_captured_by_officer_id,
+                    created_at, analysis_completed_at
+                FROM analysis_results 
+                WHERE reviewed = $1
+                ORDER BY created_at DESC 
+                LIMIT $2 OFFSET $3
+            `, [reviewStatus, limit, offset]);
+            
+            console.log(`📋 Retrieved ${result.rows.length} analyses with review status: ${reviewStatus}`);
+            return result.rows;
+        } catch (error) {
+            console.error('❌ Error getting analyses by review status:', error);
             throw error;
         }
     }
